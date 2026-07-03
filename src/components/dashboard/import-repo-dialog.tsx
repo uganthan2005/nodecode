@@ -47,11 +47,8 @@ export function ImportRepoDialog() {
         setError(typeof data.error === "string" ? data.error : "Import failed");
         return;
       }
-      setOpen(false);
-      setName("");
-      setRepoUrl("");
-      setBranch("main");
-      router.refresh();
+      // Straight into the studio — the canvas auto-triggers ingestion (PRD Flow A)
+      router.push(`/workspace/${data.workspace.id}`);
     } catch {
       setError("Network error — is the server running?");
     } finally {

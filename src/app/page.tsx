@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { GitBranch, Network, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -66,10 +65,11 @@ export default async function LandingPage(props: PageProps<"/">) {
         )}
 
         <Button asChild size="lg" className="gap-2">
-          <Link href="/api/auth/login">
+          {/* Plain anchor: route handlers must not be client-prefetched via <Link> */}
+          <a href="/api/auth/login">
             <GitHubMark className="size-5" />
             Continue with GitHub
-          </Link>
+          </a>
         </Button>
       </div>
 

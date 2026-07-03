@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { GitBranch, Search, Sparkles } from "lucide-react";
 import { ImportRepoDialog } from "@/components/dashboard/import-repo-dialog";
@@ -86,30 +87,29 @@ export default async function DashboardPage() {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {workspaces.map((workspace) => (
-                <Card
-                  key={workspace.id}
-                  className="gap-3 rounded-sm py-4 transition-colors hover:border-neon-blue/60"
-                >
-                  <CardHeader className="px-4">
-                    <CardTitle className="truncate text-base">
-                      {workspace.name}
-                    </CardTitle>
-                    {repoSlug(workspace.repoUrl) && (
-                      <p className="truncate font-mono text-xs text-muted-foreground">
-                        {repoSlug(workspace.repoUrl)}
-                      </p>
-                    )}
-                  </CardHeader>
-                  <CardContent className="flex items-center gap-2 px-4">
-                    <Badge variant="secondary" className="gap-1 font-mono text-xs">
-                      <GitBranch className="size-3" />
-                      {workspace.currentBranch}
-                    </Badge>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {dateFormat.format(workspace.updatedAt)}
-                    </span>
-                  </CardContent>
-                </Card>
+                <Link key={workspace.id} href={`/workspace/${workspace.id}`}>
+                  <Card className="gap-3 rounded-sm py-4 transition-colors hover:border-neon-blue/60">
+                    <CardHeader className="px-4">
+                      <CardTitle className="truncate text-base">
+                        {workspace.name}
+                      </CardTitle>
+                      {repoSlug(workspace.repoUrl) && (
+                        <p className="truncate font-mono text-xs text-muted-foreground">
+                          {repoSlug(workspace.repoUrl)}
+                        </p>
+                      )}
+                    </CardHeader>
+                    <CardContent className="flex items-center gap-2 px-4">
+                      <Badge variant="secondary" className="gap-1 font-mono text-xs">
+                        <GitBranch className="size-3" />
+                        {workspace.currentBranch}
+                      </Badge>
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {dateFormat.format(workspace.updatedAt)}
+                      </span>
+                    </CardContent>
+                  </Card>
+                </Link>
               ))}
             </div>
           )}

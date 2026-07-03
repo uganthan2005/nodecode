@@ -149,3 +149,19 @@
   background-image: radial-gradient(var(--slate-subtle) 1px, transparent 1px);
   background-size: 20px 20px;
 }
+
+/* Data-flow edges (UI/UX Design Brief §4): slate bezier at rest,
+   electric blue with flowing dashes when selected */
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: color-mix(in srgb, var(--neon-blue) 60%, var(--slate-subtle));
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--neon-blue);
+  stroke-dasharray: 6;
+  animation: nodecode-dataflow 0.5s linear infinite;
+}
+@keyframes nodecode-dataflow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
