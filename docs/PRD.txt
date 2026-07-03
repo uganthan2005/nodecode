@@ -1,0 +1,95 @@
+
+# Product Requirements Document (PRD): NodeCode IDE
+
+
+## 1. Product Overview
+
+NodeCode is a web-based, bi-directional visual development environment. It bridges the gap between high-level system architecture and low-level code implementation. By converting complex TypeScript/JavaScript codebases into interactive node-based graphs, users can visually comprehend, modify, and expand systems. Furthermore, integrating an AI architecture assistant allows users to scaffold entirely new repositories via natural language, which are automatically translated into visual graphs and executable local code.
+
+## 2. Goals and Objectives
+
+### Primary Goals
+
+* **Zero-Friction Onboarding:** Enable developers to understand the architecture of an existing, unfamiliar repository within minutes instead of days.
+* **Bi-Directional Sync:** Guarantee that changes made on the visual canvas reflect in the underlying code, and vice versa, without corrupting the Abstract Syntax Tree (AST).
+* **AI-Driven Scaffolding:** Empower developers to go from idea to a working local prototype using generative AI to build the initial node structure and code.
+
+### Business/Project Objectives
+
+* Deliver a functional Minimum Viable Product (MVP) focused exclusively on the TypeScript/Node.js ecosystem within a 4-to-5 month timeline.
+* Achieve a highly deterministic state-sync engine (the Single Source of Truth) to build user trust.
+
+## 3. Target Audience & Use Cases
+
+* **System Architects:** To visualize existing microservices and plan new architectural flows without digging through hundreds of files.
+* **Open Source Contributors:** To quickly map out a large public repository before submitting a Pull Request.
+* **Fast-Paced Prototypers:** Developers needing to deploy complex machine learning models or data science workflows quickly during high-pressure environments, such as developer festivals, competitive hackathons, or intensive ML challenges.
+
+## 4. Technical Stack Requirements
+
+To maintain a unified, high-velocity development cycle, the architecture will be strictly TypeScript-based:
+
+* **Framework:** Next.js (App Router)
+* **Visual Canvas:** React Flow (XYFlow)
+* **AST Parsing Engine:** `ts-morph`
+* **State Management:** Zustand
+* **AI Integration:** Vercel AI SDK (interfacing with models like Claude 3.5 Sonnet or GPT-4o)
+* **Execution Environment:** Docker (for generating local `docker-compose.yml` setups)
+
+## 5. Functional Requirements (Features)
+
+### P0 Requirements (Must-Haves for MVP)
+
+| Feature | Description | Acceptance Criteria |
+| --- | --- | --- |
+| **Repo Ingestion** | Connect to a public GitHub URL and clone the repository. | System successfully pulls the `main` branch into a temporary local/cloud volume. |
+| **AST Parsing (TS/JS)** | Parse `.ts` and `.js` files to identify functions, classes, exports, and imports. | The parser outputs a clean JSON schema mapping entities and their relationships. |
+| **Canvas Rendering** | Visualize the JSON schema as interactive nodes and edges. | Nodes display function names; edges correctly represent function calls or data flow. |
+| **Bi-Directional Deletion** | Deleting a node on the UI removes the code; deleting code removes the node. | The `ts-morph` engine correctly splices out the function without breaking the file. |
+| **AI Project Scaffolding** | Input a text prompt to generate a new project architecture. | AI outputs a valid JSON node graph, which is rendered on the canvas before code generation. |
+
+### P1 Requirements (Should-Haves for Beta Release)
+
+| Feature | Description | Acceptance Criteria |
+| --- | --- | --- |
+| **Semantic Zooming** | Group functions into file/module nodes to prevent canvas clutter. | Clicking a "Module" node expands it to reveal the inner function nodes. |
+| **Code Generation (Node)** | Generate actual TypeScript code inside a newly created visual node. | AI generates syntactically correct TS code that executes properly. |
+| **Local Test Export** | Generate a `Dockerfile` to run the AI-created code locally. | User can download a `.zip` or copy a CLI command to run the app immediately. |
+
+### P2 Requirements (Nice-to-Haves / Future Roadmap)
+
+* GitHub OAuth integration for automated Pull Requests (instead of just local downloads).
+* Real-time collaborative multiplayer canvas (like Figma).
+* Support for parsing Python (specifically for AI/Data Science codebases).
+
+## 6. User Experience (UX) Flow
+
+### Flow A: Exploring an Existing Repository
+
+1. **Input:** User pastes a GitHub URL on the landing page.
+2. **Processing:** A loading screen indicates the AST is being generated.
+3. **Visualization:** The user is presented with a high-level graph showing primary folders/modules.
+4. **Interaction:** The user clicks on the `auth.ts` module. It expands to show nodes like `loginUser()` and `verifyToken()`.
+5. **Editing:** The user drags a new empty node onto the canvas, connects it to `loginUser()`, types "Log to Database", and the IDE split-screen instantly writes the boilerplate code block.
+
+### Flow B: Generating a New Project
+
+1. **Prompt:** User types: *"Create an API that takes an image upload, processes it, and returns the result."*
+2. **Architectural Review:** The AI generates a node graph (Upload Node -> Process Node -> Response Node). The user reviews this flow.
+3. **Approval & Generation:** The user clicks "Approve Architecture". The system generates the underlying code for each node.
+4. **Export:** The user clicks "Test Locally" and receives a command to spin up the containerized code on their local machine.
+
+## 7. Success Metrics (KPIs)
+
+To measure the success of the beta launch, track the following metrics:
+
+* **Time to First Graph (TTFG):** The time it takes from pasting a GitHub URL to fully rendering the interactive canvas (Target: < 10 seconds for repos under 50 files).
+* **AST Parse Error Rate:** The percentage of repositories where `ts-morph` fails to build a valid JSON schema (Target: < 5%).
+* **Round-Trip Success Rate:** The percentage of times a user edits a node, the code updates, and the system continues to function without throwing a syntax error (Target: > 95%).
+* **AI Scaffolding Retention:** The percentage of users who utilize the AI "New Project" feature and actually export/download the generated code.
+
+## 8. Go-To-Market & Rollout Strategy
+
+* **Phase 1: Local Testing.** Validate the `ts-morph` parser on a curated list of small, well-structured open-source Next.js/TypeScript repositories.
+* **Phase 2: Alpha Release.** Release the tool as a local development script to ensure file modification works safely on the user's hard drive before moving it to a cloud environment.
+* **Phase 3: Targeted Beta Launch.** Roll the tool out as a tactical advantage for fast-paced coding environments. Target developer festivals, open-source sprints, and competitive hackathons (e.g., FOSS Hack, TCS CodeVita). Positioning the tool as a "hackathon secret weapon" for rapid prototyping will drive highly engaged, stress-testing users to validate the bi-directional sync under realistic, time-constrained conditions.

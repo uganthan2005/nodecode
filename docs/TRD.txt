@@ -1,0 +1,189 @@
+# Technical Requirements Document (TRD): NodeCode IDE
+
+## 1. System Architecture Overview
+
+NodeCode follows a **Single Source of Truth (SSoT)** architecture. To prevent race conditions and out-of-sync states between the visual canvas and the raw code files, the application uses an intermediate structured abstract representation (the **NodeCode JSON Schema**).
+
+```
+[GitHub Repo / File System] ──(ts-morph Parser)──> [Zustand Store (JSON Schema)] ──> [React Flow Canvas (UI)]
+[GitHub Repo / File System] <──(ts-morph Writer)─── [Zustand Store (JSON Schema)] <── [User Canvas Interactions]
+
+```
+
+---
+
+## 2. Frontend Architecture & Requirements
+
+The frontend is built as a highly interactive Client-Side Rendered (CSR) canvas integrated into a Next.js App Router framework.
+
+### Technology Stack & Packages
+
+* **Framework:** Next.js 15+ (React 19)
+* **Visual Engine:** `@xyflow/react` (formerly React Flow)
+* **State Management:** `zustand` (with deep structural comparison middleware to prevent unnecessary canvas re-renders)
+* **Monaco Editor:** `@monaco-editor/react` (for the split-screen code view side-by-side with the canvas)
+* **Styling:** TailwindCSS + Shadcn/ui (for accessible UI components)
+
+### Canvas & Node Structure
+
+The canvas transforms the extracted Abstract Syntax Tree (AST) into a customized node configuration.
+
+* **Module Node:** Represents a file (e.g., `auth.ts`). Serves as a bounding box containing internal nodes.
+* **Function Node:** Represents an individual function or class method. It features static input handles (Parameters) on the left and an output handle (Return Type) on the right.
+* **State / Variable Node:** Represents global state variables or database connection instances.
+
+### Frontend Performance Requirements
+
+* **Virtualization:** Large codebases must utilize React Flow's built-in element virtualization to maintain 60 FPS viewport panning with up to 2,000 nodes.
+* **Debounced Sync:** Visual node dragging changes coordinates in real-time within the Zustand store, but local storage or backend persistence must be debounced by **300ms** to avoid continuous network or disk I/O thrashing.
+
+---
+
+## 3. Backend Architecture & Requirements
+
+The backend handles the CPU-heavy tasks: cloning repositories, traversing files, manipulating the AST, and generating code patches via API routes.
+
+### Engine Components & Packages
+
+* **Runtime:** Node.js (v20+ LTS)
+* **AST Manipulation Engine:** `ts-morph`
+* **GitHub Interface:** `@octokit/rest` (for interacting with the GitHub API)
+* **File System:** Native Node.js `fs/promises` for local development orchestration.
+
+### The Ingestion Pipeline (AST Engine)
+
+When a file is loaded, the backend initiates a `ts-morph` Project instance:
+
+```typescript
+import { Project, SyntaxKind } from "ts-morph";
+
+const project = new Project();
+project.addSourceFilesAtPaths("src/**/*.ts");
+
+const sourceFiles = project.getSourceFiles();
+sourceFiles.forEach(file => {
+    // Extract Functions
+    const functions = file.getFunctions();
+    functions.forEach(fn => {
+        const name = fn.getName();
+        const params = fn.getParameters().map(p => ({ name: p.getName(), type: p.getType().getText() }));
+        const returnType = fn.getReturnType().getText();
+        
+        // Find dependencies (where this function calls other functions)
+        const calledMethods: string[] = [];
+        fn.forEachDescendant(node => {
+            if (node.getKind() === SyntaxKind.CallExpression) {
+                calledMethods.push(node.getText());
+            }
+        });
+        
+        // Build JSON node structure here...
+    });
+});
+
+```
+
+### The Reverse Engine (Code Generation & Sync)
+
+When a user updates the canvas, the client pushes a JSON patch to the Next.js API route. The backend reads the node type, matches it against its designated target file path using `ts-morph`, updates the AST tree directly, and executes `.saveSync()` to write it cleanly back to disk.
+
+---
+
+## 4. The Intermediate Data Schema (Database Representation)
+
+The active state of the visual graph is stored in a clean, declarative JSON format. When running in a cloud/SaaS environment, this JSON structure maps directly onto a **PostgreSQL** instance via **Prisma ORM**.
+
+### Core Database Entities
+
+#### `Workspace`
+
+* `id`: UUID (Primary Key)
+* `userId`: UUID (Foreign Key)
+* `repoUrl`: String
+* `currentBranch`: String
+* `createdAt`: DateTime
+
+#### `CanvasState` (The JSON Schema)
+
+```json
+{
+  "workspaceId": "d3b07384-d113-4c90-a5d9-158a5c31278c",
+  "nodes": [
+    {
+      "id": "fn_getUserData",
+      "type": "functionNode",
+      "position": { "x": 250, "y": 100 },
+      "data": {
+        "fileName": "src/services/user.ts",
+        "functionName": "getUserData",
+        "parameters": [{ "name": "userId", "type": "string" }],
+        "returnType": "Promise<User>",
+        "rawCode": "async function getUserData(userId: string): Promise<User> { ... }"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_1",
+      "source": "fn_authMiddleware",
+      "target": "fn_getUserData",
+      "type": "dataFlow"
+    }
+  ]
+}
+
+```
+
+---
+
+## 5. API Design & Core Endpoints
+
+The frontend communicates with the backend via RESTful JSON endpoints and a streaming endpoint for AI generation.
+
+### REST Endpoints
+
+* `POST /api/repo/ingest`
+* **Payload:** `{ "repoUrl": "string", "branch": "string" }`
+* **Response:** `200 OK` with the complete `CanvasState` JSON object.
+
+
+* `POST /api/canvas/sync`
+* **Payload:** `{ "workspaceId": "string", "changes": [PatchObject] }`
+* **Response:** `200 OK` confirming file system rewrite successful.
+
+
+
+### Streaming AI Architecture Endpoint
+
+* `POST /api/ai/scaffold`
+* **Payload:** `{ "prompt": "string", "stack": "Next.js/TypeScript" }`
+* **Response:** `text/event-stream` using the **Vercel AI SDK**.
+* **Behavior:** The stream first sends structured JSON packets to render the graph real-time on screen, followed by subsequent text streams that populate the code containers inside the individual nodes.
+
+
+
+---
+
+## 6. AI Orchestration Strategy
+
+To maximize accuracy and prevent code structural breakages, the platform enforces a strict separated context protocol:
+
+1. **System Prompting:** The LLM is forced to output a structured JSON matching our `CanvasState` format. It is explicitly instructed *never* to write logic code in Step 1, only the architectural skeleton (nodes, inputs, outputs, and edge routes).
+2. **Code Infill Execution:** Once the user accepts the visual graph layout, individual, parallelized AI sub-workers execute. Each sub-worker receives *only* the specific function node data, its parameters, and its intended targets to write single-responsibility, highly reliable code blocks.
+
+---
+
+## 7. Cloud Integration & DevOps Tools
+
+### Local Execution Sandbox
+
+To fulfill the requirement of running the AI-scaffolded projects locally, the backend dynamically generates a standardized runtime envelope:
+
+* **Docker Containerization:** Every scaffolding prompt automatically includes the generation of a `.devcontainer/` folder and a base `docker-compose.yml` file configuring Node.js alongside a pre-configured database (e.g., PostgreSQL or Redis) if requested in the prompt.
+* **CLI Tooling:** A custom local runner package (`npm exec nodeCode-runner`) will execute locally on the user's terminal, spinning up the Docker environment and watching file alterations initiated by the browser-based UI.
+
+### Cloud SaaS Deployment (Production Architecture)
+
+* **Hosting:** Vercel (Frontend & Serverless Functions).
+* **Heavy Duty Async Compute:** AWS ECS Fargate instances are spun up dynamically to clone, execute heavy AST mutations, and bundle large enterprise codebases without hitting serverless timeout thresholds.
+* **Isolation Security:** Temporary repository file cloning must take place in an isolated `/tmp` volume that completely wipes itself upon the termination of the user session or synchronization container to ensure customer IP protection.

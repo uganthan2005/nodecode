@@ -1,0 +1,95 @@
+# UI/UX Design Brief: NodeCode IDE
+
+## 1. Look & Feel (The Vibe)
+
+**Theme: Technical Minimalism meets Dark Cyber-Aesthetic**
+The interface should feel tactile, responsive, and unapologetically engineered. It draws heavy inspiration from premium tech hardware (like transparent casings and dot-matrix displays) and modern competitive gaming clients. It is strictly dark-mode-first to reduce eye strain during long coding sessions.
+
+* **Texture:** Subtle dot-matrix grids on the background canvas.
+* **Surfaces:** Matte dark grays with stark, high-contrast white text. Translucent "glassmorphism" panels for floating menus, allowing the underlying node graph to blur through.
+* **Motion:** Snappy and mechanical. Hovering over a node should trigger a subtle neon glow, and data flow along edges should be animated with moving dashes (like electrical pulses).
+
+## 2. Color Palette
+
+The palette relies on a deep monochrome base to keep the visual noise low, utilizing sharp neon accents solely for interaction, states, and data flow.
+
+| Color Name | Hex Code | Usage in UI |
+| --- | --- | --- |
+| **Abyss Black** | `#050505` | App background, Canvas base layer. |
+| **Matte Graphite** | `#141414` | Secondary surfaces, node backgrounds, sidebars. |
+| **Stark White** | `#F5F5F5` | Primary text, active icons, main borders. |
+| **Subtle Slate** | `#404040` | Inactive states, muted text, grid lines, disabled borders. |
+| **Neon Accent (Cyber Red)** | `#FF4655` | Error states, delete actions, critical node alerts (e.g., broken AST). |
+| **Neon Accent (Matrix Green)** | `#00FFA3` | Success states, active AI generation pulses, "Run Locally" buttons. |
+| **Electric Blue** | `#00D1FF` | Selection outlines, data flow edges, primary call-to-action buttons. |
+
+## 3. Typography
+
+The typography must prioritize legibility and a distinctly developer-centric aesthetic.
+
+* **Primary UI Font (Sans-Serif):** *Space Grotesk* or *Inter*. Used for headers, dashboard text, and button labels. It provides a clean, geometric, and modern tech feel.
+* **Code & Node Font (Monospace):** *JetBrains Mono* or *Fira Code*. Used exclusively inside the code editor, inside the nodes for function names, and for parameter/variable tags. The ligatures are essential for code readability.
+
+## 4. Core UI Components
+
+### The Nodes (Functions/Classes)
+
+* **Visual Structure:** Sharp, 2px rounded corners. Matte graphite background with a 1px solid border.
+* **Header:** Features the function name in bold monospace.
+* **Ports (Input/Output):** Small electric blue circles on the left and right edges.
+* **Hover State:** The 1px border glows electric blue, and the node elevates slightly with a drop shadow.
+
+### The Edges (Data Flow Lines)
+
+* **Static State:** Solid, subtle slate (`#404040`) bezier curves connecting nodes.
+* **Active State:** When code is executing or a user selects a path, the line turns electric blue with an animated, flowing dashed effect representing data movement.
+
+### Panels & Modals
+
+* **Style:** Floated slightly above the canvas with a strong backdrop blur (glassmorphism). This ensures the user never feels disconnected from the global architecture, even when configuring local settings.
+
+---
+
+## 5. Screen-by-Screen Breakdown
+
+### Screen 1: The Dashboard Hub
+
+* **Layout:** A highly structured, grid-based layout.
+* **Header:** A stark white logo on the top left. A global search bar in the center (styled like a command-line input: `> search workspaces...`).
+* **Main Content:**
+* A prominent, wide input field at the very top: *"Initialize New Project via AI Prompt."* Pressing 'Enter' glows Matrix Green and launches the AI scaffolding.
+* Below are "Recent Workspaces" displayed as stark, rectangular cards showing the repo name, branch, and a mini-map thumbnail of the node graph.
+
+
+
+### Screen 2: The Visual IDE Studio (Main Workflow)
+
+* **The Canvas (Left 70%):**
+* A deep black background with a subtle slate dot-matrix pattern spaced every 20px.
+* Floating on top left: A minimalist translucent toolbar with zoom controls and a "Add Node" icon.
+
+
+* **The Editor (Right 30%):**
+* Separated from the canvas by a draggable, 2px vertical neon-blue line.
+* The Monaco Editor is themed completely borderless, melting seamlessly into the dark background.
+* Syntax highlighting utilizes the core color palette (Stark White for variables, Cyber Red for strings, Electric Blue for keywords).
+
+
+* **The Footer (Status Bar):**
+* A thin, 24px high bar at the very bottom.
+* Left side: Shows local sync status with a pulsing green dot (`System: In Sync`).
+* Right side: Shows Git status branch name (`git: main`).
+
+
+
+### Screen 3: The AI Generation Overlay
+
+* **Trigger:** When the user enters a prompt to build a new architecture.
+* **Visuals:** The screen dims slightly. The AI starts plotting the graph in real-time.
+* **Animation:** As nodes are created, they fade in with a matrix green flash. The edges draw themselves sequentially to map out the flow. A translucent, floating modal at the bottom center displays the AI's internal monologue in a monospace typewriter effect (e.g., `> Generating auth middleware... > Connecting to PostgreSQL node...`).
+
+### Screen 4: Local Runner Terminal (Drawer)
+
+* **Layout:** A drawer that slides up from the footer, covering the bottom 40% of the screen.
+* **Styling:** Pure black background, resembling a raw Unix terminal.
+* **Content:** Streams local Docker container logs in stark white and matrix green. It includes a large, prominent "Stop Server" button styled with the Cyber Red accent to quickly kill the local instances.

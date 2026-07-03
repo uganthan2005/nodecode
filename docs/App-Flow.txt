@@ -1,0 +1,172 @@
+## 1. Information Architecture & Core Views
+
+The application is structured around a four-tiered navigation hierarchy designed to minimize context switching.
+
+```
+                  ┌───────────────────────────────┐
+                  │          Landing Page         │
+                  └───────────────┬───────────────┘
+                                  │
+                  ┌───────────────▼───────────────┐
+                  │       Dashboard / Home        │
+                  └───────────────┬───────────────┘
+                                  │
+         ┌────────────────────────┴────────────────────────┐
+         ▼                                                 ▼
+┌─────────────────────────────────┐               ┌─────────────────────────────────┐
+│     Flow A: Import Workspace    │               │    Flow B: AI Project Creator   │
+└────────────────┬────────────────┘               └────────────────┬────────────────┘
+                 │                                                 │
+                 └────────────────────────┬────────────────────────┘
+                                          │
+                          ┌───────────────▼───────────────┐
+                          │   Core Visual IDE Canvas      │
+                          │   (Split-Screen Graph/Code)   │
+                          └───────────────────────────────┘
+
+```
+
+### The 4 Core Views
+
+1. **Landing Page / Auth:** Unauthenticated view. Provides a quick summary of features and an onboarding portal utilizing GitHub OAuth.
+2. **Dashboard Hub:** A clean interface showing recent workspaces, connected GitHub repositories, template starters, and a prominent "Scaffold New Project with AI" action bar.
+3. **The Visual IDE Studio (Main View):** A high-performance split-screen environment:
+* *Left Panel (70% Width):* The React Flow canvas rendering interactive nodes and edges representing code structure.
+* *Right Panel (30% Width):* An integrated Monaco text editor reflecting the code of the currently selected node.
+
+
+4. **Local Sync Terminal View:** A modal/drawer displaying execution states, Docker container logs, and Git diff configurations before confirming a commit.
+
+---
+
+## 2. Detailed User Flow Diagrams
+
+### Flow A: Ingesting & Modifying an Existing GitHub Repository
+
+This flow dictates how a developer brings a legacy project into NodeCode to visualize and edit it.
+
+```
+[User enters Dashboard]
+       │
+       ▼
+[Clicks "Import Repository"] ──> [Inputs GitHub URL & Selects Branch]
+                                               │
+                                               ▼
+[System triggers backend cloning & ts-morph parsing pipeline]
+                                               │
+                                               ▼
+[Canvas opens: High-level Module Nodes rendered]
+       │
+       ▼
+[User double-clicks a Module Node (e.g., `api/users.ts`)]
+       │
+       ▼
+[Module expands to display internal Function Nodes & Call Graph Edges]
+       │
+       ▼
+[User clicks a specific Function Node]
+       │
+       ├────────────────────────────────────────┐
+       ▼                                        ▼
+[Monaco Editor opens on right panel]     [User deletes node on canvas]
+[User modifies code text directly]              │
+       │                                        ▼
+       ▼                                [Corresponding code is safely]
+[Zustand state detects change]           [spliced out via ts-morph AST]
+[Visual node metrics update instantly]          │
+       │                                        │
+       └───────────────────┬────────────────────┘
+                           │
+                           ▼
+             [User reviews local git diff]
+                           │
+                           ▼
+          [Clicks "Commit & Push Changes"]
+
+```
+
+### Flow B: Greenfield Project Scaffolding via AI
+
+This flow covers the user journey of launching a completely brand-new codebase from a natural language prompt.
+
+```
+[User enters Dashboard]
+       │
+       ▼
+[Clicks "New Project with AI"]
+       │
+       ▼
+[Enters prompt: "Build an API that handles CSV processing & uploads to S3"]
+       │
+       ▼
+[AI structures layout -> Canvas streams structural JSON Nodes real-time]
+       │
+       ▼
+[User reviews architectural skeleton graph (No code written yet)]
+       │
+       ├────────────────────────────────────────┐
+       ▼ (If Architecture needs adjustments)   ▼ (If Architecture is correct)
+[User manually drags new connections]   [User clicks "Approve Architecture"]
+[Or types follow-up prompt to adjust]           │
+       │                                        ▼
+       └────────────────────────────────> [Parallelized AI code infill sub-workers execute]
+                                                │
+                                                ▼
+                                    [Canvas populates with code]
+                                                │
+                                                ▼
+                                    [User clicks "Run Locally"]
+                                                │
+                                                ▼
+                                 [Modal reveals unique CLI token command:]
+                                 [`npm exec nodecode-runner --token=XYZ`]
+                                                │
+                                                ▼
+                                [User runs command in their local terminal]
+                                [Docker containers spin up environment]
+
+```
+
+---
+
+## 3. Screen-by-Screen User Navigation Matrix
+
+### 1. Dashboard UI
+
+* **Header:** Persistent top navigation bar displaying: Logo, Global Search (find functions across all workspaces), Profile/Account settings, and Global Notifications.
+* **Main Section:** Grid array layout displaying large project cards. Cards contain: Repository Name, Project Type Badge (e.g., Next.js, Node.js), Last Synchronized Timestamp, and Branch indicator.
+* **Primary Action Area:** Sidebar or persistent top banner containing a large text input box reading: *"What are we building today?"* directly triggering Flow B.
+
+### 2. The Visual IDE Studio UI Layout
+
+This is where the user spends 90% of their time. It is structured into an advanced application shell.
+
+* **Left Canvas Toolbar:** Floating contextual controls containing:
+* `Zoom In / Out / Fit to Screen` buttons.
+* `Filter Layers:` Toggle switches to hide/reveal variable declarations, internal utilities, or external framework dependencies (keeps the visual graph clean).
+* `Add Node Tool:` A draggable menu to pull empty custom functions, endpoints, or state nodes directly into the canvas.
+
+
+* **Right Code Panel Header:**
+* File Path breadcrumbs (e.g., `src` > `controllers` > `authController.ts`).
+* `Lock Sync` Toggle: Allows developers to pause the instantaneous bi-directional compiler compilation if they want to write long, broken code segments without breaking the global AST parser, syncing only when they toggle it back on.
+
+
+* **Footer Status Indicator:**
+* **Sync State Indicator:** Small green/yellow glowing indicator badge showing `[Connected to Localhost Runner]`, `[AST Valid]`, or `[Parsing Compilation Error]`.
+* **Git Controller:** A button displaying the count of uncommitted changes (e.g., `5 Pending Changes`), clicking it expands the local terminal overlay drawer.
+
+
+
+---
+
+## 4. Edge Cases & Error Handling Flow
+
+### Code Syntax Breakage Handling
+
+When the user writes broken syntax inside the right-hand Monaco editor that cannot form a valid TypeScript AST tree:
+
+1. The backend parser (`ts-morph`) throws a critical syntax diagnostic error block.
+2. Instead of crashing the application, the system locks the visual canvas state instantly to its last known good configuration.
+3. The footer status bar turns red with an active warning reading: *“Invalid AST syntax detected. Visual graph modifications paused until resolved.”*
+4. The exact broken syntax lines are highlighted inside the Monaco Editor using traditional red warning squiggles until the user fixes the code syntax errors. Once corrected, the canvas unlocks automatically and seamlessly updates.

@@ -1,0 +1,83 @@
+Here is the comprehensive, phase-wise implementation plan for the **NodeCode IDE**. This roadmap synthesizes all prior documentation (PRD, TRD, UI/UX Brief, App Flow, and Backend Schema) into an aggressive, structured **20-week development lifecycle**.
+
+It is divided into 5 clear phases, organizing engineering tasks across frontend, backend, and DevOps domains.
+
+---
+
+## Phase 1: Foundation, Security & Database Infrastructure (Weeks 1–3)
+
+**Objective:** Establish the core Next.js monorepo, set up the PostgreSQL database schema, and finalize the authentication flow so users can create isolated workspaces.
+
+* **Reference Documents:** Backend Schema (Section 1 & 2), App Flow (Landing Page & Dashboard).
+* **Key Engineering Tasks:**
+* **DevOps:** Initialize the Next.js (App Router) project with TailwindCSS and Shadcn/ui. Set up the local Docker environment for the PostgreSQL database.
+* **Backend (Schema):** Configure Prisma ORM and migrate the 5 core tables (`User`, `Workspace`, `CanvasState`, `CodeModule`, `CodeEntity`). Implement the Generalized Inverted Index (GIN) on the `CanvasState.nodes` column.
+* **Authentication (Flow):** Implement the GitHub OAuth 2.0 flow. Create the `/api/auth/callback` route, handle the user profile upsert, and establish the stateless JWT cookie session.
+* **Frontend (UI/UX):** Build the Dashboard Hub UI using the "Abyss Black" and "Matte Graphite" color palette. Create the repository import modal.
+
+
+* **Phase 1 Milestone:** A user can log in via GitHub, view a dark-themed dashboard, and successfully create a new "Workspace" entry in the database.
+
+---
+
+## Phase 2: The Ingestion Pipeline & Visual Canvas (Weeks 4–8)
+
+**Objective:** Build the core Abstract Syntax Tree (AST) parser capable of reading TypeScript files and rendering them instantly onto the interactive React Flow canvas.
+
+* **Reference Documents:** TRD (Section 3), PRD (Flow A), UI/UX (The Visual IDE Studio).
+* **Key Engineering Tasks:**
+* **Backend (AST Engine):** Integrate `ts-morph` and `@octokit/rest`. Write the `/api/repo/ingest` endpoint to clone a target GitHub repo into a temporary volume, parse the `.ts` files, and output the structured JSON.
+* **Frontend (State):** Implement the Zustand global store to handle the `CanvasState` JSON without triggering unnecessary DOM re-renders.
+* **Frontend (Canvas UI):** Integrate `@xyflow/react`. Design the custom "Module Node" and "Function Node" components with the "Electric Blue" input/output ports and "JetBrains Mono" typography.
+* **Animation (UI/UX):** Implement the active/static state bezier curves for the edges (data flow lines).
+
+
+* **Phase 2 Milestone:** A user can paste a GitHub URL, the backend parses it, and the frontend beautifully renders a read-only, interactive node graph of the codebase.
+
+---
+
+## Phase 3: Bi-Directional Sync & The Split-Screen IDE (Weeks 9–12)
+
+**Objective:** Bridge the visual graph and the underlying text code. Enable users to edit nodes on the canvas and have the backend safely rewrite the physical files.
+
+* **Reference Documents:** TRD (Section 1 & 3), App Flow (Edge Cases).
+* **Key Engineering Tasks:**
+* **Frontend (Editor):** Integrate `@monaco-editor/react` into the right 30% panel of the IDE Studio. Apply the borderless, dark custom theme to match the canvas.
+* **Backend (Reverse Engine):** Write the `/api/canvas/sync` endpoint. Program `ts-morph` to receive JSON patches, locate the exact file/function, modify the AST directly, and execute `.saveSync()`.
+* **State Sync & Debouncing:** Implement a 300ms debounce on the frontend so dragging a node updates the UI instantly but waits to push the DB/File update to prevent network thrashing.
+* **Error Handling (App Flow):** Implement the "Syntax Breakage" lock. If the Monaco editor detects invalid TS code, the canvas locks, the footer turns "Cyber Red," and graph modifications are disabled until the syntax is fixed.
+
+
+* **Phase 3 Milestone:** The "Single Source of Truth" is achieved. Deleting a node deletes the code; writing a new function in the editor spawns a new node on the canvas.
+
+---
+
+## Phase 4: AI Scaffolding & Local Execution Runner (Weeks 13–17)
+
+**Objective:** Implement the generative AI architecture to allow greenfield project scaffolding from natural language, and build the local CLI runner to execute the code.
+
+* **Reference Documents:** PRD (Flow B), TRD (Section 6 & 7).
+* **Key Engineering Tasks:**
+* **Backend (AI Engine):** Integrate the Vercel AI SDK. Write the multi-step prompt orchestration: Step 1 forces the LLM to output only the structural `CanvasState` JSON. Step 2 spins up parallel sub-workers to write the inner TypeScript logic for each node.
+* **Frontend (AI Overlay):** Build the "Matrix Green" animated loading overlay where users watch the structural graph generate node-by-node before approving the code infill.
+* **DevOps (CLI Runner):** Develop the `nodecode-runner` npm package. Build the WebSocket connection that binds the browser session (using `WorkspaceToken`) to the local terminal.
+* **Docker Integration:** Program the backend to automatically generate `docker-compose.yml` envelopes for AI-generated projects.
+
+
+* **Phase 4 Milestone:** A user types "Build a TS Auth API", watches the graph draw itself, approves it, and runs `npm exec nodecode-runner` to start the working API on their local machine.
+
+---
+
+## Phase 5: Optimization, Testing & Beta Launch (Weeks 18–20)
+
+**Objective:** Harden the platform, squash edge-case bugs, optimize performance for large codebases, and prepare for a high-traffic beta launch.
+
+* **Reference Documents:** PRD (Success Metrics), UI/UX (Motion & Polish).
+* **Key Engineering Tasks:**
+* **Performance:** Implement React Flow viewport virtualization so the browser can handle up to 2,000 nodes at 60 FPS without crashing.
+* **Backend Optimization:** Move heavy repository cloning and AST parsing from serverless functions to AWS ECS Fargate instances to bypass Vercel's execution timeout limits.
+* **Security:** Ensure the `/tmp` volume wipe mechanism works flawlessly, deleting all cloned repository data immediately after a session ends.
+* **UI Polish:** Audit all hover states, transition animations, and dark-mode contrast ratios against the design brief.
+
+
+* **Phase 5 Milestone:** Platform is stable. Time to First Graph (TTFG) is under 10 seconds, and the AST Parse Error rate is below 5%. Ready for developer onboarding.

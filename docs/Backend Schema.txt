@@ -1,0 +1,129 @@
+# Backend Schema & Authentication Architecture Document
+
+## 1. Authentication & Security Flow
+
+NodeCode relies exclusively on **GitHub OAuth 2.0** for authentication. This eliminates password storage risks and seamlessly grants the platform scoped permissions to interact with the user's repositories.
+
+### The OAuth & Session Pipeline
+
+```
+[User] ──(1. Click "Login")──> [GitHub OAuth Screen] ──(2. Authorize)──> [NodeCode Backend]
+                                                                               │
+[User Terminal] <──(5. Cookie Token)── [Browser Workspace] <──(3. Issue JWT)───┴──(4. Save/Update User)──> [PostgreSQL]
+
+```
+
+1. **Authorization Initiation:** The frontend redirects the user to `GET [https://github.com/login/oauth/authorize](https://github.com/login/oauth/authorize)` requesting the `repo` and `user:email` scopes.
+2. **Callback Processing:** GitHub redirects back to `/api/auth/callback` with a temporary `code`. The backend exchanges this code for a GitHub Access Token via a secure server-to-server request.
+3. **User Verification & Upsert:** The backend fetches the user's GitHub profile (`[https://api.github.com/user](https://api.github.com/user)`). It checks the database:
+* If the user exists, it updates their `githubAccessToken` and profile metadata.
+* If they don't exist, it registers them as a new record.
+
+
+4. **Session Generation:** The backend signs a stateless **JSON Web Token (JWT)** containing the `userId` and sets it as an `HttpOnly`, `Secure`, `SameSite=Strict` cookie in the user's browser.
+5. **Local Runner Security:** When the user connects their local terminal via `npm exec nodecode-runner --token=XYZ`, the local runner establishes a secure WebSocket connection. The backend validates the connection handshake by verifying the ephemeral workspace token (`WorkspaceToken`) mapped to that specific active session.
+
+---
+
+## 2. Relational Database Schema (PostgreSQL)
+
+Below is the structured data schema mapped using standard Prisma/Relational notation. It enforces strict cascading rules to clean up detached system state fragments.
+
+### User Table
+
+Stores the primary identity and third-party credential sync tokens.
+
+* `id`: `UUID` (Primary Key, Defaults to `uuid_generate_v4()`)
+* `email`: `VARCHAR(255)` (Unique, Indexed)
+* `githubId`: `INT` (Unique, Indexed) - GitHub's internal numerical ID.
+* `username`: `VARCHAR(100)`
+* `avatarUrl`: `TEXT`
+* `githubAccessToken`: `TEXT` (Encrypted at rest using AES-256-GCM)
+* `createdAt`: `TIMESTAMP` (Defaults to `NOW()`)
+* `updatedAt`: `TIMESTAMP`
+
+### Workspace Table
+
+Represents an isolated engineering sandbox bound to a specific codebase repository.
+
+* `id`: `UUID` (Primary Key)
+* `userId`: `UUID` (Foreign Key -> `User.id`, `ON DELETE CASCADE`)
+* `name`: `VARCHAR(255)`
+* `repoUrl`: `TEXT`
+* `currentBranch`: `VARCHAR(100)` (Defaults to `'main'`)
+* `createdAt`: `TIMESTAMP`
+* `updatedAt`: `TIMESTAMP`
+
+### CanvasState Table
+
+Holds the raw, deterministic spatial and abstract data structures of the React Flow board. It acts as the Single Source of Truth snapshot.
+
+* `id`: `UUID` (Primary Key)
+* `workspaceId`: `UUID` (Unique Foreign Key -> `Workspace.id`, `ON DELETE CASCADE`)
+* `nodes`: `JSONB` - Stores an array of nodes containing coordinates, custom dimensions, file paths, parameters, and types.
+* `edges`: `JSONB` - Stores the relational dependency lines mapping node connections.
+* `updatedAt`: `TIMESTAMP`
+
+### CodeModule Table
+
+Highly indexed catalog of individual physical code assets parsed out of the Abstract Syntax Tree (AST).
+
+* `id`: `UUID` (Primary Key)
+* `workspaceId`: `UUID` (Foreign Key -> `Workspace.id`, `ON DELETE CASCADE`)
+* `filePath`: `TEXT` (Indexed) - E.g., `src/controllers/auth.ts`
+* `hash`: `VARCHAR(64)` - SHA-256 fingerprint of file contents to track out-of-sync local mutations.
+* `updatedAt`: `TIMESTAMP`
+
+### CodeEntity Table
+
+Granular functional chunks within a code module (functions, interfaces, classes) mapped straight to graph visual canvas blocks.
+
+* `id`: `UUID` (Primary Key)
+* `moduleId`: `UUID` (Foreign Key -> `CodeModule.id`, `ON DELETE CASCADE`)
+* `name`: `VARCHAR(255)` - Name of the function/class.
+* `type`: `VARCHAR(50)` - Enum: `FUNCTION`, `CLASS`, `METHOD`, `INTERFACE`.
+* `startLine`: `INT`
+* `endLine`: `INT`
+* `rawCode`: `TEXT` - The text block of code.
+
+### WorkspaceToken Table
+
+Short-lived cryptographically secure tokens used to pair the browser visual IDE with the user's physical terminal runner.
+
+* `id`: `UUID` (Primary Key)
+* `workspaceId`: `UUID` (Foreign Key -> `Workspace.id`, `ON DELETE CASCADE`)
+* `token`: `VARCHAR(64)` (Unique, Indexed)
+* `expiresAt`: `TIMESTAMP`
+
+---
+
+## 3. Data Relationships Matrix
+
+The core entity mappings are designed to balance high-speed lookup querying alongside complete reference safety constraints.
+
+| Parent Table | Child Table | Relationship Type | Join Cardinality Key | On Delete Behavior |
+| --- | --- | --- | --- | --- |
+| `User` | `Workspace` | One-to-Many | `Workspace.userId` ➔ `User.id` | `CASCADE` |
+| `Workspace` | `CanvasState` | One-to-One | `CanvasState.workspaceId` ➔ `Workspace.id` | `CASCADE` |
+| `Workspace` | `CodeModule` | One-to-Many | `CodeModule.workspaceId` ➔ `Workspace.id` | `CASCADE` |
+| `Workspace` | `WorkspaceToken` | One-to-Many | `WorkspaceToken.workspaceId` ➔ `Workspace.id` | `CASCADE` |
+| `CodeModule` | `CodeEntity` | One-to-Many | `CodeEntity.moduleId` ➔ `CodeModule.id` | `CASCADE` |
+
+---
+
+## 4. Query & Storage Optimization Strategies
+
+### PostgreSQL `JSONB` Indexing
+
+The `CanvasState.nodes` and `edges` fields leverage PostgreSQL's advanced binary JSON format. To ensure quick traversal and lookups when dragging objects on the frontend canvas, a **GIN (Generalized Inverted Index)** is applied to the nodes column:
+
+```sql
+CREATE INDEX idx_canvas_nodes_gin ON "CanvasState" USING gin (nodes);
+
+```
+
+This optimization ensures that tracking whether an entity ID exists inside a large layout remains a sub-millisecond execution even under heavy scale.
+
+### AST Partition Optimization
+
+When scanning massive target repositories, individual functions are broken up into rows inside the `CodeEntity` table. Indexes are constructed on the composite tracking key of `(moduleId, name)`. This allows the `ts-morph` compiler engine to selectively patch changed blocks instead of performing expensive structural table updates across the whole codebase when a user modifies a singular element node block on the screen.
