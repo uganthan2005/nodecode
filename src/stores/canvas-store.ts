@@ -7,37 +7,79 @@ import {
   type NodeChange,
 } from "@xyflow/react";
 import { create } from "zustand";
+import type { EntityType } from "@/lib/canvas/types";
 
 // Zustand store (TRD §2): the client-side half of the Single Source of Truth.
-// Phase 2 is read-only — node drags mutate positions locally; persistence
-// and bi-directional code sync arrive in Phase 3.
+// Holds the RAW graph as persisted; the rendered view (semantic zoom +
+// layer filters) is derived from it via deriveViewGraph. Phase 3 adds the
+// debounced persistence + code sync.
 
 export type CanvasStatus = "idle" | "ingesting" | "ready" | "error";
 
 interface CanvasStore {
-  nodes: Node[];
-  edges: Edge[];
+  rawNodes: Node[];
+  rawEdges: Edge[];
+  collapsedModules: ReadonlySet<string>;
+  hiddenTypes: ReadonlySet<EntityType>;
   status: CanvasStatus;
   error: string | null;
-  selectedNodeId: string | null;
   setGraph: (nodes: Node[], edges: Edge[]) => void;
+  toggleModule: (moduleId: string) => void;
+  setAllCollapsed: (collapsed: boolean) => void;
+  toggleType: (entityType: EntityType) => void;
   setStatus: (status: CanvasStatus, error?: string | null) => void;
-  setSelectedNode: (nodeId: string | null) => void;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
 }
 
+const allModuleIds = (nodes: Node[]): Set<string> =>
+  new Set(nodes.filter((n) => n.type === "moduleNode").map((n) => n.id));
+
 export const useCanvasStore = create<CanvasStore>((set) => ({
-  nodes: [],
-  edges: [],
+  rawNodes: [],
+  rawEdges: [],
+  collapsedModules: new Set<string>(),
+  hiddenTypes: new Set<EntityType>(),
   status: "idle",
   error: null,
-  selectedNodeId: null,
-  setGraph: (nodes, edges) => set({ nodes, edges, status: "ready", error: null }),
+  // PRD Flow A: first render is the high-level view — every module collapsed
+  setGraph: (nodes, edges) =>
+    set({
+      rawNodes: nodes,
+      rawEdges: edges,
+      collapsedModules: allModuleIds(nodes),
+      status: "ready",
+      error: null,
+    }),
+  toggleModule: (moduleId) =>
+    set((state) => {
+      const next = new Set(state.collapsedModules);
+      if (next.has(moduleId)) {
+        next.delete(moduleId);
+      } else {
+        next.add(moduleId);
+      }
+      return { collapsedModules: next };
+    }),
+  setAllCollapsed: (collapsed) =>
+    set((state) => ({
+      collapsedModules: collapsed
+        ? allModuleIds(state.rawNodes)
+        : new Set<string>(),
+    })),
+  toggleType: (entityType) =>
+    set((state) => {
+      const next = new Set(state.hiddenTypes);
+      if (next.has(entityType)) {
+        next.delete(entityType);
+      } else {
+        next.add(entityType);
+      }
+      return { hiddenTypes: next };
+    }),
   setStatus: (status, error = null) => set({ status, error }),
-  setSelectedNode: (selectedNodeId) => set({ selectedNodeId }),
   onNodesChange: (changes) =>
-    set((state) => ({ nodes: applyNodeChanges(changes, state.nodes) })),
+    set((state) => ({ rawNodes: applyNodeChanges(changes, state.rawNodes) })),
   onEdgesChange: (changes) =>
-    set((state) => ({ edges: applyEdgeChanges(changes, state.edges) })),
+    set((state) => ({ rawEdges: applyEdgeChanges(changes, state.rawEdges) })),
 }));

@@ -9,14 +9,17 @@ import {
   ReactFlow,
   type Edge,
   type Node,
+  type NodeMouseHandler,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { FilterPanel } from "@/components/canvas/filter-panel";
 import { FunctionNode } from "@/components/canvas/function-node";
 import { ModuleNode } from "@/components/canvas/module-node";
 import { Button } from "@/components/ui/button";
+import { deriveViewGraph } from "@/lib/canvas/derive";
 import { useCanvasStore } from "@/stores/canvas-store";
 
 const nodeTypes = {
@@ -46,20 +49,38 @@ export function WorkspaceCanvas({
   initialEdges,
   hasRepo,
 }: WorkspaceCanvasProps) {
-  const { nodes, edges, status, error, onNodesChange, onEdgesChange } =
-    useCanvasStore(
-      useShallow((s) => ({
-        nodes: s.nodes,
-        edges: s.edges,
-        status: s.status,
-        error: s.error,
-        onNodesChange: s.onNodesChange,
-        onEdgesChange: s.onEdgesChange,
-      })),
-    );
+  const {
+    rawNodes,
+    rawEdges,
+    collapsedModules,
+    hiddenTypes,
+    status,
+    error,
+    onNodesChange,
+    onEdgesChange,
+    toggleModule,
+  } = useCanvasStore(
+    useShallow((s) => ({
+      rawNodes: s.rawNodes,
+      rawEdges: s.rawEdges,
+      collapsedModules: s.collapsedModules,
+      hiddenTypes: s.hiddenTypes,
+      status: s.status,
+      error: s.error,
+      onNodesChange: s.onNodesChange,
+      onEdgesChange: s.onEdgesChange,
+      toggleModule: s.toggleModule,
+    })),
+  );
   const setGraph = useCanvasStore((s) => s.setGraph);
   const setStatus = useCanvasStore((s) => s.setStatus);
   const ingestStartedRef = useRef(false);
+
+  // Semantic zoom + layer filters project the raw graph into the visible one
+  const { nodes, edges } = useMemo(
+    () => deriveViewGraph(rawNodes, rawEdges, collapsedModules, hiddenTypes),
+    [rawNodes, rawEdges, collapsedModules, hiddenTypes],
+  );
 
   const runIngest = useCallback(async () => {
     setStatus("ingesting");
@@ -92,6 +113,14 @@ export function WorkspaceCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Double-click a Module Node to expand/collapse it (App Flow §2)
+  const handleNodeDoubleClick = useCallback<NodeMouseHandler>(
+    (_, node) => {
+      if (node.type === "moduleNode") toggleModule(node.id);
+    },
+    [toggleModule],
+  );
+
   return (
     <div className="relative flex-1">
       <ReactFlow
@@ -99,6 +128,7 @@ export function WorkspaceCanvas({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDoubleClick={handleNodeDoubleClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -108,6 +138,7 @@ export function WorkspaceCanvas({
         colorMode="dark"
         nodesConnectable={false}
         deleteKeyCode={null}
+        zoomOnDoubleClick={false}
         className="!bg-background"
       >
         <Background
@@ -116,8 +147,9 @@ export function WorkspaceCanvas({
           size={1}
           color="var(--slate-subtle)"
         />
+        <FilterPanel />
         <Controls
-          position="top-left"
+          position="bottom-left"
           className="[&_button]:!border-border [&_button]:!bg-card [&_button]:!fill-foreground"
         />
         <MiniMap
