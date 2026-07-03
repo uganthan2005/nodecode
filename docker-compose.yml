@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nodecode-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nodecode
+      POSTGRES_PASSWORD: nodecode_dev
+      POSTGRES_DB: nodecode
+    ports:
+      # 5433 on host: a native Windows Postgres already occupies 5432
+      - "5433:5432"
+    volumes:
+      - nodecode_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nodecode -d nodecode"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  nodecode_pgdata:

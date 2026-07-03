@@ -1,0 +1,103 @@
+// NodeCode IDE — core relational schema (Backend Schema doc, Section 2)
+// Single Source of Truth: CanvasState holds the React Flow graph snapshot;
+// CodeModule/CodeEntity catalog the parsed AST for selective ts-morph patching.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                String   @id @default(uuid()) @db.Uuid
+  email             String   @unique @db.VarChar(255)
+  githubId          Int      @unique
+  username          String   @db.VarChar(100)
+  avatarUrl         String?
+  // AES-256-GCM ciphertext (iv:authTag:payload) — never store the raw token
+  githubAccessToken String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  workspaces Workspace[]
+}
+
+model Workspace {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  name          String   @db.VarChar(255)
+  repoUrl       String?
+  currentBranch String   @default("main") @db.VarChar(100)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canvasState CanvasState?
+  codeModules CodeModule[]
+  tokens      WorkspaceToken[]
+
+  @@index([userId])
+}
+
+model CanvasState {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @unique @db.Uuid
+  nodes       Json     @default("[]")
+  edges       Json     @default("[]")
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([nodes(ops: JsonbOps)], type: Gin)
+}
+
+model CodeModule {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  filePath    String
+  // SHA-256 fingerprint of file contents to detect out-of-sync local mutations
+  hash        String   @db.VarChar(64)
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entities  CodeEntity[]
+
+  @@index([workspaceId])
+  @@index([filePath])
+}
+
+enum EntityType {
+  FUNCTION
+  CLASS
+  METHOD
+  INTERFACE
+}
+
+model CodeEntity {
+  id        String     @id @default(uuid()) @db.Uuid
+  moduleId  String     @db.Uuid
+  name      String     @db.VarChar(255)
+  type      EntityType
+  startLine Int
+  endLine   Int
+  rawCode   String
+
+  module CodeModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  // Composite key lets ts-morph patch a single entity without full-table scans
+  @@index([moduleId, name])
+}
+
+model WorkspaceToken {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @db.Uuid
+  token       String   @unique @db.VarChar(64)
+  expiresAt   DateTime
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
