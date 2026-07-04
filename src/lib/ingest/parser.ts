@@ -3,6 +3,37 @@ import path from "node:path";
 import { Node, Project, type SourceFile } from "ts-morph";
 import type { EntityType } from "@/lib/canvas/types";
 
+/**
+ * The text span of an entity INCLUDING its leading comments/JSDoc. The
+ * reverse engine replaces exactly this span, so what the editor shows is
+ * byte-for-byte what a save overwrites — no comment loss or duplication.
+ */
+export function entitySpan(node: Node): { start: number; end: number } {
+  const comments = node.getLeadingCommentRanges();
+  const start = comments.length > 0 ? comments[0].getPos() : node.getStart(true);
+  return { start, end: node.getEnd() };
+}
+
+/**
+ * Arrow functions catalogued by variable name edit as their whole statement
+ * (`const parse = ...`), not the bare declaration fragment.
+ */
+export function entitySpanNode(node: Node): Node {
+  if (Node.isVariableDeclaration(node)) {
+    const statement = node.getVariableStatement();
+    if (statement && statement.getDeclarations().length === 1) {
+      return statement;
+    }
+  }
+  return node;
+}
+
+function spanText(node: Node): string {
+  const spanNode = entitySpanNode(node);
+  const { start, end } = entitySpan(spanNode);
+  return spanNode.getSourceFile().getFullText().slice(start, end);
+}
+
 // The Ingestion Pipeline (TRD §3): walk every .ts/.tsx source file with
 // ts-morph and reduce it to a clean, declarative entity catalog.
 
@@ -21,6 +52,8 @@ export interface ParsedEntity {
 export interface ParsedModule {
   filePath: string;
   hash: string;
+  /** Current full text of the file — persisted as the durable working copy */
+  source: string;
   entities: ParsedEntity[];
 }
 
@@ -62,7 +95,7 @@ function clampCode(text: string): string {
     : text;
 }
 
-function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
+function parseSourceFile(file: SourceFile, filePath: string): ParsedModule {
   const entities: ParsedEntity[] = [];
 
   // Plain function declarations
@@ -76,7 +109,7 @@ function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
       returnType: fn.getReturnTypeNode()?.getText() ?? fn.getReturnType().getText(fn),
       startLine: fn.getStartLineNumber(),
       endLine: fn.getEndLineNumber(),
-      rawCode: clampCode(fn.getText()),
+      rawCode: clampCode(spanText(fn)),
       calls: collectCalls(fn),
     });
   }
@@ -99,7 +132,7 @@ function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
         initializer.getReturnType().getText(initializer),
       startLine: decl.getStartLineNumber(),
       endLine: decl.getEndLineNumber(),
-      rawCode: clampCode(decl.getText()),
+      rawCode: clampCode(spanText(decl)),
       calls: collectCalls(initializer),
     });
   }
@@ -115,7 +148,7 @@ function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
       returnType: className,
       startLine: cls.getStartLineNumber(),
       endLine: cls.getEndLineNumber(),
-      rawCode: clampCode(cls.getText()),
+      rawCode: clampCode(spanText(cls)),
       calls: [],
     });
     for (const method of cls.getMethods()) {
@@ -127,7 +160,7 @@ function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
           method.getReturnTypeNode()?.getText() ?? method.getReturnType().getText(method),
         startLine: method.getStartLineNumber(),
         endLine: method.getEndLineNumber(),
-        rawCode: clampCode(method.getText()),
+        rawCode: clampCode(spanText(method)),
         calls: collectCalls(method),
       });
     }
@@ -142,15 +175,16 @@ function parseSourceFile(file: SourceFile, rootDir: string): ParsedModule {
       returnType: iface.getName(),
       startLine: iface.getStartLineNumber(),
       endLine: iface.getEndLineNumber(),
-      rawCode: clampCode(iface.getText()),
+      rawCode: clampCode(spanText(iface)),
       calls: [],
     });
   }
 
   const fullText = file.getFullText();
   return {
-    filePath: path.relative(rootDir, file.getFilePath()).replaceAll("\\", "/"),
+    filePath,
     hash: createHash("sha256").update(fullText).digest("hex"),
+    source: fullText,
     entities,
   };
 }
@@ -175,8 +209,33 @@ export function parseRepository(rootDir: string): ParseResult {
   if (truncated) files = files.slice(0, MAX_FILES);
 
   const modules = files
-    .map((file) => parseSourceFile(file, rootDir))
+    .map((file) =>
+      parseSourceFile(
+        file,
+        path.relative(rootDir, file.getFilePath()).replaceAll("\\", "/"),
+      ),
+    )
     .filter((module) => module.entities.length > 0);
 
   return { modules, truncated };
+}
+
+/**
+ * Parses in-memory sources (the DB working copies) — used by the reverse
+ * engine to rebuild the graph after a code mutation without touching disk.
+ * Modules left with zero entities are dropped from the graph but their DB
+ * rows (and source text) survive.
+ */
+export function parseSources(
+  sources: Array<{ filePath: string; source: string }>,
+): ParsedModule[] {
+  const project = new Project({
+    useInMemoryFileSystem: true,
+    compilerOptions: { allowJs: true },
+  });
+  return sources
+    .map(({ filePath, source }) =>
+      parseSourceFile(project.createSourceFile(filePath, source), filePath),
+    )
+    .filter((module) => module.entities.length > 0);
 }

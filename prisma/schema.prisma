@@ -58,6 +58,9 @@ model CodeModule {
   id          String   @id @default(uuid()) @db.Uuid
   workspaceId String   @db.Uuid
   filePath    String
+  // Current full text of the file — the durable working copy the ts-morph
+  // reverse engine rewrites (temp clones are wiped after ingest)
+  source      String   @default("")
   // SHA-256 fingerprint of file contents to detect out-of-sync local mutations
   hash        String   @db.VarChar(64)
   updatedAt   DateTime @updatedAt

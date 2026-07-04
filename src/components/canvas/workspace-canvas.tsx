@@ -10,6 +10,9 @@ import {
   type Edge,
   type Node,
   type NodeMouseHandler,
+  type OnBeforeDelete,
+  type OnNodeDrag,
+  type OnNodesDelete,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -20,6 +23,8 @@ import { FunctionNode } from "@/components/canvas/function-node";
 import { ModuleNode } from "@/components/canvas/module-node";
 import { Button } from "@/components/ui/button";
 import { deriveViewGraph } from "@/lib/canvas/derive";
+import { postSync } from "@/lib/canvas/sync-client";
+import type { FunctionNodeData } from "@/lib/canvas/types";
 import { useCanvasStore } from "@/stores/canvas-store";
 
 const nodeTypes = {
@@ -35,6 +40,8 @@ const defaultEdgeOptions = {
   type: "default" as const, // bezier
   style: { stroke: "var(--slate-subtle)", strokeWidth: 1.5 },
 };
+
+const MOVE_DEBOUNCE_MS = 300; // TRD §2: drag renders instantly, persistence debounced
 
 interface WorkspaceCanvasProps {
   workspaceId: string;
@@ -56,6 +63,7 @@ export function WorkspaceCanvas({
     hiddenTypes,
     status,
     error,
+    syncStatus,
     onNodesChange,
     onEdgesChange,
     toggleModule,
@@ -67,6 +75,7 @@ export function WorkspaceCanvas({
       hiddenTypes: s.hiddenTypes,
       status: s.status,
       error: s.error,
+      syncStatus: s.syncStatus,
       onNodesChange: s.onNodesChange,
       onEdgesChange: s.onEdgesChange,
       toggleModule: s.toggleModule,
@@ -74,9 +83,17 @@ export function WorkspaceCanvas({
   );
   const setGraph = useCanvasStore((s) => s.setGraph);
   const setStatus = useCanvasStore((s) => s.setStatus);
-  const ingestStartedRef = useRef(false);
+  const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
+  const setSyncStatus = useCanvasStore((s) => s.setSyncStatus);
+  const applyServerGraph = useCanvasStore((s) => s.applyServerGraph);
 
-  // Semantic zoom + layer filters project the raw graph into the visible one
+  const ingestStartedRef = useRef(false);
+  const pendingMovesRef = useRef<Record<string, { x: number; y: number }>>({});
+  const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // App Flow §4: syntax breakage locks the canvas at its last good state
+  const astLocked = syncStatus === "ast-error";
+
   const { nodes, edges } = useMemo(
     () => deriveViewGraph(rawNodes, rawEdges, collapsedModules, hiddenTypes),
     [rawNodes, rawEdges, collapsedModules, hiddenTypes],
@@ -101,8 +118,6 @@ export function WorkspaceCanvas({
     }
   }, [workspaceId, setGraph, setStatus]);
 
-  // Seed the store from the server snapshot; auto-ingest on first visit
-  // (PRD Flow A: URL in → loading screen → graph out).
   useEffect(() => {
     if (initialNodes.length > 0) {
       setGraph(initialNodes, initialEdges);
@@ -113,7 +128,6 @@ export function WorkspaceCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Double-click a Module Node to expand/collapse it (App Flow §2)
   const handleNodeDoubleClick = useCallback<NodeMouseHandler>(
     (_, node) => {
       if (node.type === "moduleNode") toggleModule(node.id);
@@ -121,14 +135,86 @@ export function WorkspaceCanvas({
     [toggleModule],
   );
 
+  const handleNodeClick = useCallback<NodeMouseHandler>(
+    (_, node) => {
+      if (node.type === "functionNode") setSelectedNode(node.id);
+    },
+    [setSelectedNode],
+  );
+
+  // Debounced position persistence
+  const handleNodeDragStop = useCallback<OnNodeDrag>(
+    (_, __, draggedNodes) => {
+      for (const node of draggedNodes) {
+        pendingMovesRef.current[node.id] = node.position;
+      }
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
+      moveTimerRef.current = setTimeout(() => {
+        const positions = pendingMovesRef.current;
+        pendingMovesRef.current = {};
+        void postSync(workspaceId, [{ op: "moveNodes", positions }]);
+      }, MOVE_DEBOUNCE_MS);
+    },
+    [workspaceId],
+  );
+
+  // Only function nodes are deletable, and never while the AST is broken
+  const handleBeforeDelete = useCallback<OnBeforeDelete>(
+    async ({ nodes: toDelete, edges: edgesToDelete }) => {
+      if (astLocked) return false;
+      const functionNodes = toDelete.filter((n) => n.type === "functionNode");
+      if (functionNodes.length === 0) return false;
+      return { nodes: functionNodes, edges: edgesToDelete };
+    },
+    [astLocked],
+  );
+
+  // Bi-directional deletion (PRD P0): removing the node splices out the code
+  const handleNodesDelete = useCallback<OnNodesDelete>(
+    async (deleted) => {
+      const changes = deleted
+        .filter((n) => n.type === "functionNode")
+        .map((n) => {
+          const data = n.data as FunctionNodeData;
+          return {
+            op: "deleteEntity" as const,
+            filePath: data.fileName,
+            entityName: data.functionName,
+          };
+        });
+      if (changes.length === 0) return;
+
+      setSyncStatus("saving");
+      const outcome = await postSync(workspaceId, changes);
+      if (outcome.ok) {
+        if (outcome.canvasState) {
+          applyServerGraph(
+            outcome.canvasState.nodes as never,
+            outcome.canvasState.edges as never,
+          );
+        }
+        setSyncStatus("synced");
+      } else if (outcome.kind === "ast-error") {
+        setSyncStatus("ast-error", outcome.diagnostics);
+      } else {
+        setSyncStatus("sync-error");
+      }
+    },
+    [workspaceId, applyServerGraph, setSyncStatus],
+  );
+
   return (
-    <div className="relative flex-1">
+    <div className="relative h-full w-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
+        onNodeDragStop={handleNodeDragStop}
+        onBeforeDelete={handleBeforeDelete}
+        onNodesDelete={handleNodesDelete}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
@@ -137,7 +223,8 @@ export function WorkspaceCanvas({
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
         nodesConnectable={false}
-        deleteKeyCode={null}
+        nodesDraggable={!astLocked}
+        deleteKeyCode={astLocked ? null : "Delete"}
         zoomOnDoubleClick={false}
         className="!bg-background"
       >
@@ -161,6 +248,14 @@ export function WorkspaceCanvas({
           maskColor="rgba(5, 5, 5, 0.7)"
         />
       </ReactFlow>
+
+      {astLocked && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center">
+          <p className="rounded-b-[2px] border border-t-0 border-neon-red/50 bg-neon-red/10 px-4 py-1.5 font-mono text-xs text-neon-red backdrop-blur">
+            canvas locked — fix the syntax error in the editor
+          </p>
+        </div>
+      )}
 
       {status === "ingesting" && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm">
@@ -187,7 +282,7 @@ export function WorkspaceCanvas({
         <button
           type="button"
           onClick={runIngest}
-          title="Re-clone the repository and rebuild the graph"
+          title="Re-clone the repository and rebuild the graph (discards code edits)"
           className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-[2px] border bg-card/80 px-3 py-1.5 font-mono text-xs text-muted-foreground backdrop-blur transition-colors hover:border-neon-blue/60 hover:text-foreground"
         >
           <RefreshCw className="size-3.5" />

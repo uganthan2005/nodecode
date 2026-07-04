@@ -49,6 +49,9 @@ export async function POST(request: NextRequest) {
 
   // Preflight via GitHub API: clear errors + branch fallback before cloning
   const { owner, repo } = parseRepoUrl(workspace.repoUrl);
+  // Best-effort preflight: a definite 404 fails fast with a clear message and
+  // a missing branch falls back to the default. Rate limits or network issues
+  // must NOT block ingestion — git clone below doesn't use the REST API.
   const octokit = new Octokit({ auth: accessToken });
   let branch = workspace.currentBranch;
   try {
@@ -62,11 +65,15 @@ export async function POST(request: NextRequest) {
         data: { currentBranch: branch },
       });
     }
-  } catch {
-    return NextResponse.json(
-      { error: `Repository ${owner}/${repo} not found or not accessible` },
-      { status: 404 },
-    );
+  } catch (error) {
+    const status = (error as { status?: number }).status;
+    if (status === 404) {
+      return NextResponse.json(
+        { error: `Repository ${owner}/${repo} not found or not accessible` },
+        { status: 404 },
+      );
+    }
+    console.warn(`GitHub preflight skipped for ${owner}/${repo}:`, status);
   }
 
   const { dir, cleanup } = await cloneRepo(workspace.repoUrl, branch, accessToken);
@@ -90,6 +97,7 @@ export async function POST(request: NextRequest) {
               workspaceId: workspace.id,
               filePath: module.filePath,
               hash: module.hash,
+              source: module.source,
               entities: {
                 createMany: {
                   data: module.entities.map((entity) => ({

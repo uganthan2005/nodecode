@@ -2,13 +2,14 @@ import type { Edge, Node } from "@xyflow/react";
 import { ArrowLeft, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { WorkspaceCanvas } from "@/components/canvas/workspace-canvas";
+import { FooterStatus } from "@/components/studio/footer-status";
+import { StudioShell } from "@/components/studio/studio-shell";
 import { Badge } from "@/components/ui/badge";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 
-// The Visual IDE Studio (App Flow §1, view 3). Phase 2 ships the canvas;
-// the Monaco split-screen panel arrives in Phase 3.
+// The Visual IDE Studio (App Flow §1, view 3): split-screen canvas + Monaco
+// with bi-directional sync through /api/canvas/sync.
 
 export default async function WorkspacePage(props: PageProps<"/workspace/[id]">) {
   const userId = await getSessionUserId();
@@ -50,7 +51,7 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
         </Badge>
       </header>
 
-      <WorkspaceCanvas
+      <StudioShell
         workspaceId={workspace.id}
         initialNodes={initialNodes}
         initialEdges={initialEdges}
@@ -58,10 +59,7 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
       />
 
       <footer className="flex h-6 shrink-0 items-center justify-between border-t bg-card/60 px-4 font-mono text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="size-1.5 animate-pulse rounded-full bg-neon-green" />
-          AST Valid
-        </span>
+        <FooterStatus />
         <span>git: {workspace.currentBranch}</span>
       </footer>
     </div>

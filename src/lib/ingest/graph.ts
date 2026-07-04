@@ -22,6 +22,29 @@ export function moduleNodeId(filePath: string): string {
   return `mod:${filePath}`;
 }
 
+/**
+ * Rebuilt graphs keep the user's spatial arrangement: nodes that survived a
+ * mutation retain their previous position (renamed entities carry theirs
+ * over via renameMap); genuinely new nodes keep the computed layout spot.
+ */
+export function mergeNodePositions(
+  previous: Array<Pick<CanvasNode, "id" | "position">>,
+  next: CanvasNode[],
+  renameMap?: ReadonlyMap<string, string>,
+): CanvasNode[] {
+  const previousPositions = new Map(previous.map((n) => [n.id, n.position]));
+  if (renameMap) {
+    for (const [oldId, newId] of renameMap) {
+      const position = previousPositions.get(oldId);
+      if (position) previousPositions.set(newId, position);
+    }
+  }
+  return next.map((node) => {
+    const position = previousPositions.get(node.id);
+    return position ? { ...node, position } : node;
+  });
+}
+
 export function entityNodeId(filePath: string, name: string): string {
   return `fn:${filePath}#${name}`;
 }
