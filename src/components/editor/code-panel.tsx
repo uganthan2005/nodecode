@@ -254,6 +254,17 @@ export function CodePanel({ workspaceId }: { workspaceId: string }) {
         </button>
       </div>
 
+      {nodeData?.scaffold === "pending" && (
+        <div className="shrink-0 border-b border-neon-green/30 bg-neon-green/[0.06] px-3 py-2">
+          <p className="font-mono text-[11px] uppercase tracking-wider text-neon-green/80">
+            skeleton — awaiting AI code generation
+          </p>
+          {typeof nodeData.description === "string" && (
+            <p className="mt-1 text-xs text-muted-foreground">{nodeData.description}</p>
+          )}
+        </div>
+      )}
+
       {nodeData ? (
         <Editor
           language="typescript"

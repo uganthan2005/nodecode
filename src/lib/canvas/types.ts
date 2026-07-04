@@ -10,6 +10,10 @@ export interface FunctionNodeData {
   parameters: Array<{ name: string; type: string }>;
   returnType: string;
   rawCode: string;
+  /** AI scaffolding: "pending" while the node is a skeleton stub awaiting infill */
+  scaffold?: "pending";
+  /** AI scaffolding: the plan spec an infill worker implements against */
+  description?: string;
   [key: string]: unknown;
 }
 

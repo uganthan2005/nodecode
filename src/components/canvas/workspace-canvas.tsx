@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css";
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { ApproveArchitectureBar } from "@/components/canvas/approve-architecture-bar";
 import { FilterPanel } from "@/components/canvas/filter-panel";
 import { FunctionNode } from "@/components/canvas/function-node";
 import { ModuleNode } from "@/components/canvas/module-node";
@@ -219,6 +220,9 @@ export function WorkspaceCanvas({
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}
         fitView
+        // TRD §2 / Phase 5: only mount nodes within the viewport so large
+        // codebases (up to ~2000 nodes) keep 60 FPS panning.
+        onlyRenderVisibleElements
         minZoom={0.1}
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
@@ -248,6 +252,8 @@ export function WorkspaceCanvas({
           maskColor="rgba(5, 5, 5, 0.7)"
         />
       </ReactFlow>
+
+      {status === "ready" && <ApproveArchitectureBar workspaceId={workspaceId} />}
 
       {astLocked && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center">

@@ -8,6 +8,20 @@ const execFileAsync = promisify(execFile);
 
 const GITHUB_REPO_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/;
 
+/**
+ * Wipes a temp clone directory (TRD §7 isolation). Never throws — a failed
+ * cleanup must not mask the real error in a caller's `finally`, and customer
+ * IP must never survive a session. Retries handle Windows locks on git packs.
+ */
+async function safeWipe(dir: string): Promise<void> {
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 120 });
+  } catch (error) {
+    // Best-effort: log and move on. The OS reclaims the temp root eventually.
+    console.warn(`temp clone wipe failed for ${dir}:`, error);
+  }
+}
+
 export interface RepoRef {
   owner: string;
   repo: string;
@@ -46,7 +60,7 @@ export async function cloneRepo(
       { timeout: 120_000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } },
     );
   } catch (error) {
-    await rm(dir, { recursive: true, force: true });
+    await safeWipe(dir);
     const message = error instanceof Error ? error.message : String(error);
     // Never leak the tokenized URL back to the caller
     throw new Error(
@@ -56,6 +70,6 @@ export async function cloneRepo(
 
   return {
     dir,
-    cleanup: () => rm(dir, { recursive: true, force: true }),
+    cleanup: () => safeWipe(dir),
   };
 }

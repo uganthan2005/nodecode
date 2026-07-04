@@ -1,0 +1,16 @@
+{
+  "name": "nodecode-runner",
+  "version": "0.1.0",
+  "description": "Local runner for NodeCode IDE — pairs a terminal to a workspace, boots the Docker envelope, and live-syncs files with the browser.",
+  "type": "module",
+  "bin": {
+    "nodecode-runner": "./cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "ws": "^8.21.0"
+  }
+}

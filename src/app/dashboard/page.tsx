@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { GitBranch, Search, Sparkles } from "lucide-react";
+import { GitBranch, Search } from "lucide-react";
+import { AiPromptBar } from "@/components/dashboard/ai-prompt-bar";
 import { ImportRepoDialog } from "@/components/dashboard/import-repo-dialog";
 import { UserMenu } from "@/components/dashboard/user-menu";
 import { Badge } from "@/components/ui/badge";
@@ -54,19 +55,7 @@ export default async function DashboardPage() {
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-10">
         <section className="rounded-sm border bg-card/80 p-6 backdrop-blur">
-          <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="size-4 text-neon-green" />
-            <h1 className="font-semibold">What are we building today?</h1>
-            <Badge variant="outline" className="ml-auto font-mono text-xs">
-              Phase 4
-            </Badge>
-          </div>
-          <Input
-            className="h-12 font-mono"
-            placeholder="Initialize new project via AI prompt — e.g. 'Build an API that handles CSV processing & uploads to S3'"
-            disabled
-            title="AI scaffolding arrives in Phase 4"
-          />
+          <AiPromptBar />
         </section>
 
         <section className="flex flex-1 flex-col gap-4">

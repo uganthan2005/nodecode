@@ -21,13 +21,16 @@ function FunctionNodeComponent({
   const paramPreview = data.parameters
     .map((p) => `${p.name}: ${p.type}`)
     .join(", ");
+  const pending = data.scaffold === "pending";
 
   return (
     <div
       className={`w-[240px] rounded-[2px] border bg-[#141414] px-3 py-2 font-mono transition-shadow ${
-        selected
-          ? "border-neon-blue shadow-[0_0_12px_rgba(0,209,255,0.35)]"
-          : "border-border hover:border-neon-blue/60 hover:shadow-[0_0_8px_rgba(0,209,255,0.2)]"
+        pending
+          ? "nodecode-skeleton border-dashed border-neon-green/50"
+          : selected
+            ? "border-neon-blue shadow-[0_0_12px_rgba(0,209,255,0.35)]"
+            : "border-border hover:border-neon-blue/60 hover:shadow-[0_0_8px_rgba(0,209,255,0.2)]"
       }`}
     >
       <Handle

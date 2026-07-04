@@ -165,3 +165,62 @@
     stroke-dashoffset: -12;
   }
 }
+
+/* AI scaffolding (Phase 4): "Matrix Green" overlay + skeleton node treatment */
+
+/* Skeleton function nodes pulse until their code is infilled */
+.nodecode-skeleton {
+  animation: nodecode-skeleton-pulse 1.8s ease-in-out infinite;
+}
+@keyframes nodecode-skeleton-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(0, 255, 163, 0);
+  }
+  50% {
+    box-shadow: 0 0 10px rgba(0, 255, 163, 0.25);
+  }
+}
+
+/* Scaffolding overlay backdrop: faint static scanlines */
+.matrix-overlay {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(0, 255, 163, 0.04) 0px,
+    rgba(0, 255, 163, 0.04) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* Staged terminal-style status lines fade in one after another */
+.matrix-stage {
+  opacity: 0;
+  animation: nodecode-stage-in 0.5s ease forwards;
+}
+@keyframes nodecode-stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Motion & polish (Phase 5): honor OS "reduce motion" — kill looping/scaffold
+   animations for users who opt out, keeping the UI static but fully functional. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .nodecode-skeleton,
+  .react-flow__edge.selected .react-flow__edge-path {
+    animation: none !important;
+  }
+}

@@ -2,6 +2,7 @@ import type { Edge, Node } from "@xyflow/react";
 import { ArrowLeft, GitBranch } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ConnectRunner } from "@/components/studio/connect-runner";
 import { FooterStatus } from "@/components/studio/footer-status";
 import { StudioShell } from "@/components/studio/studio-shell";
 import { Badge } from "@/components/ui/badge";
@@ -45,10 +46,13 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
             {workspace.repoUrl.replace("https://github.com/", "")}
           </span>
         )}
-        <Badge variant="secondary" className="ml-auto gap-1 font-mono text-xs">
-          <GitBranch className="size-3" />
-          {workspace.currentBranch}
-        </Badge>
+        <div className="ml-auto flex items-center gap-3">
+          <ConnectRunner workspaceId={workspace.id} />
+          <Badge variant="secondary" className="gap-1 font-mono text-xs">
+            <GitBranch className="size-3" />
+            {workspace.currentBranch}
+          </Badge>
+        </div>
       </header>
 
       <StudioShell
