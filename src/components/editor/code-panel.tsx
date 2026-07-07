@@ -1,12 +1,13 @@
 "use client";
 
-import Editor, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import { ChevronRight, Lock, LockOpen } from "lucide-react";
+import Editor, { DiffEditor, type BeforeMount, type OnMount } from "@monaco-editor/react";
+import { ChevronRight, Lock, LockOpen, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { postSync } from "@/lib/canvas/sync-client";
 import type { FunctionNodeData } from "@/lib/canvas/types";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { useRunnerStore } from "@/stores/runner-store";
 
 // Right IDE panel (App Flow §1 view 3): borderless Monaco showing the selected
 // node's code. Edits push through /api/canvas/sync debounced by 300ms (TRD §2).
@@ -73,6 +74,8 @@ export function CodePanel({ workspaceId }: { workspaceId: string }) {
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
   const setSyncStatus = useCanvasStore((s) => s.setSyncStatus);
   const setSyncPaused = useCanvasStore((s) => s.setSyncPaused);
+  const diffView = useRunnerStore((s) => s.diffView);
+  const clearDiffView = useRunnerStore((s) => s.clearDiffView);
 
   const [buffer, setBuffer] = useState("");
   const sessionRef = useRef<EditSession | null>(null);
@@ -209,6 +212,44 @@ export function CodePanel({ workspaceId }: { workspaceId: string }) {
   };
 
   const breadcrumbs = nodeData?.fileName.split("/") ?? [];
+
+  // Source Control (Phase 5 §3): a requested diff takes over the right panel
+  // until the user closes it.
+  if (diffView) {
+    return (
+      <div className="flex h-full flex-col bg-[#0a0a0a]">
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-card/60 px-3 font-mono text-xs">
+          <span className="truncate text-neon-blue">{diffView.filePath}</span>
+          <span className="text-muted-foreground">working tree diff</span>
+          <button
+            type="button"
+            onClick={clearDiffView}
+            title="Close diff"
+            className="ml-auto text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1">
+          <DiffEditor
+            language="typescript"
+            theme="nodecode-dark"
+            original={diffView.original}
+            modified={diffView.modified}
+            beforeMount={defineTheme}
+            options={{
+              fontFamily: "var(--font-jetbrains-mono), 'JetBrains Mono', monospace",
+              fontSize: 13,
+              readOnly: true,
+              minimap: { enabled: false },
+              renderSideBySide: true,
+              scrollBeyondLastLine: false,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col bg-[#0a0a0a]">

@@ -27,6 +27,8 @@ interface CanvasStore {
   status: CanvasStatus;
   error: string | null;
   selectedNodeId: string | null;
+  /** File Explorer (Phase 5): a module node id the canvas should pan/zoom to */
+  focusRequest: string | null;
   syncStatus: SyncStatus;
   /** Manual "Lock Sync" toggle (UIUX §3): pause pushes while typing broken code */
   syncPaused: boolean;
@@ -35,6 +37,9 @@ interface CanvasStore {
   /** Replace the graph after a sync WITHOUT resetting view state (zoom/filters) */
   applyServerGraph: (nodes: Node[], edges: Edge[]) => void;
   toggleModule: (moduleId: string) => void;
+  expandModule: (moduleId: string) => void;
+  requestFocus: (nodeId: string) => void;
+  clearFocusRequest: () => void;
   setAllCollapsed: (collapsed: boolean) => void;
   toggleType: (entityType: EntityType) => void;
   setStatus: (status: CanvasStatus, error?: string | null) => void;
@@ -56,6 +61,7 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
   status: "idle",
   error: null,
   selectedNodeId: null,
+  focusRequest: null,
   syncStatus: "synced",
   syncPaused: false,
   diagnostics: [],
@@ -96,6 +102,15 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
       }
       return { collapsedModules: next };
     }),
+  expandModule: (moduleId) =>
+    set((state) => {
+      if (!state.collapsedModules.has(moduleId)) return {};
+      const next = new Set(state.collapsedModules);
+      next.delete(moduleId);
+      return { collapsedModules: next };
+    }),
+  requestFocus: (nodeId) => set({ focusRequest: nodeId }),
+  clearFocusRequest: () => set({ focusRequest: null }),
   setAllCollapsed: (collapsed) =>
     set((state) => ({
       collapsedModules: collapsed

@@ -11,8 +11,10 @@ import {
   type Node,
   type NodeMouseHandler,
   type OnBeforeDelete,
+  type OnInit,
   type OnNodeDrag,
   type OnNodesDelete,
+  type ReactFlowInstance,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -27,6 +29,7 @@ import { deriveViewGraph } from "@/lib/canvas/derive";
 import { postSync } from "@/lib/canvas/sync-client";
 import type { FunctionNodeData } from "@/lib/canvas/types";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { useRunnerStore } from "@/stores/runner-store";
 
 const nodeTypes = {
   functionNode: FunctionNode,
@@ -65,6 +68,7 @@ export function WorkspaceCanvas({
     status,
     error,
     syncStatus,
+    focusRequest,
     onNodesChange,
     onEdgesChange,
     toggleModule,
@@ -77,6 +81,7 @@ export function WorkspaceCanvas({
       status: s.status,
       error: s.error,
       syncStatus: s.syncStatus,
+      focusRequest: s.focusRequest,
       onNodesChange: s.onNodesChange,
       onEdgesChange: s.onEdgesChange,
       toggleModule: s.toggleModule,
@@ -87,10 +92,28 @@ export function WorkspaceCanvas({
   const setSelectedNode = useCanvasStore((s) => s.setSelectedNode);
   const setSyncStatus = useCanvasStore((s) => s.setSyncStatus);
   const applyServerGraph = useCanvasStore((s) => s.applyServerGraph);
+  const clearFocusRequest = useCanvasStore((s) => s.clearFocusRequest);
 
   const ingestStartedRef = useRef(false);
   const pendingMovesRef = useRef<Record<string, { x: number; y: number }>>({});
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactFlowRef = useRef<ReactFlowInstance<Node, Edge> | null>(null);
+
+  const handleInit = useCallback<OnInit<Node, Edge>>((instance) => {
+    reactFlowRef.current = instance;
+  }, []);
+
+  // File Explorer (Phase 5): pan/zoom to a module node when a file is clicked
+  // in the sidebar tree.
+  useEffect(() => {
+    if (!focusRequest) return;
+    const instance = reactFlowRef.current;
+    const node = instance?.getNode(focusRequest);
+    if (instance && node) {
+      instance.fitView({ nodes: [node], duration: 500, maxZoom: 1.2 });
+    }
+    clearFocusRequest();
+  }, [focusRequest, clearFocusRequest]);
 
   // App Flow §4: syntax breakage locks the canvas at its last good state
   const astLocked = syncStatus === "ast-error";
@@ -138,7 +161,10 @@ export function WorkspaceCanvas({
 
   const handleNodeClick = useCallback<NodeMouseHandler>(
     (_, node) => {
-      if (node.type === "functionNode") setSelectedNode(node.id);
+      if (node.type === "functionNode") {
+        setSelectedNode(node.id);
+        useRunnerStore.getState().clearDiffView();
+      }
     },
     [setSelectedNode],
   );
@@ -216,6 +242,7 @@ export function WorkspaceCanvas({
         onNodeDragStop={handleNodeDragStop}
         onBeforeDelete={handleBeforeDelete}
         onNodesDelete={handleNodesDelete}
+        onInit={handleInit}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultEdgeOptions={defaultEdgeOptions}

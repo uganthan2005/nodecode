@@ -1,6 +1,6 @@
-Here is the comprehensive, phase-wise implementation plan for the **NodeCode IDE**. This roadmap synthesizes all prior documentation (PRD, TRD, UI/UX Brief, App Flow, and Backend Schema) into an aggressive, structured **20-week development lifecycle**.
+Here is the comprehensive, phase-wise implementation plan for the **NodeCode IDE**. This roadmap synthesizes all prior documentation (PRD, TRD, UI/UX Brief, App Flow, and Backend Schema) into an aggressive, structured **24-week development lifecycle**.
 
-It is divided into 5 clear phases, organizing engineering tasks across frontend, backend, and DevOps domains.
+It is divided into 6 clear phases, organizing engineering tasks across frontend, backend, and DevOps domains.
 
 ---
 
@@ -68,16 +68,53 @@ It is divided into 5 clear phases, organizing engineering tasks across frontend,
 
 ---
 
-## Phase 5: Optimization, Testing & Beta Launch (Weeks 18–20)
+## Phase 5: The "Daily Driver" IDE Features (Weeks 18–21)
 
-**Objective:** Harden the platform, squash edge-case bugs, optimize performance for large codebases, and prepare for a high-traffic beta launch.
+**Objective:** Transform the visualizer into a fully functional development environment by adding physical file navigation, local command execution, and version control, ensuring the developer never has to leave the browser.
+
+* **Reference Documents:** TRD (Section 7 - Local Execution Runner), App Flow (The Visual IDE Studio), Backend Schema (`WorkspaceToken`).
+* **Key Engineering Tasks:**
+
+### 1. The Source Code Tree (File Explorer)
+
+* **Backend Task:** Create a lightweight API route (`/api/workspace/tree`) that uses Node's native `fs/promises` to recursively map the cloned repository's directory structure (ignoring `node_modules` and `.git`).
+* **Frontend Task:** Implement a React tree-view component in the left sidebar (15% width).
+* **State Integration:** Bind the tree to the Zustand store. Clicking a `.ts` file in the tree should instantly filter the React Flow canvas to focus on the module node for that specific file.
+
+### 2. Integrated Terminal & Quick Actions
+
+* **Frontend Task:** Integrate `xterm.js` into a collapsible bottom drawer. Style it with the "Abyss Black" theme.
+* **Backend / Local Runner Task:** Expand the `nodecode-runner` CLI tool. It must establish a bi-directional WebSocket connection (`socket.io` or native WebSockets) that pipes the standard input/output (stdin/stdout) of the local machine's shell directly into the browser's `xterm.js` instance.
+* **Quick Actions UI:** Build a row of predefined action buttons above the terminal. When clicked, these send predefined strings via the WebSocket to execute locally:
+  * `▶ Run Dev Server` (Executes `npm run dev`)
+  * `📦 Install Dependencies` (Executes `npm install`)
+  * `🧹 Lint & Format` (Executes `npm run lint`)
+
+### 3. Version Control (Git UI)
+
+* **Backend / Local Runner Task:** Write secure, sanitized wrapper functions around the local machine's Git CLI (e.g., `exec('git status')`).
+* **Frontend Task:** Add a "Source Control" tab next to the File Tree in the left sidebar.
+* **Diff & Commit UI:**
+  * Fetch the output of `git status` and list modified files in the sidebar.
+  * Clicking a modified file opens the **Monaco Diff Editor** (a built-in feature of Monaco) in the right-hand panel, showing the before-and-after of the AI or manual code changes.
+  * Add a text input for the commit message and a primary "Commit & Push" button that executes `git add .`, `git commit -m "[message]"`, and `git push`.
+
+
+* **Phase 5 Milestone:** The user can navigate their physical files via the left sidebar, spin up their local server using a quick-action button in the integrated terminal, and commit their AI-generated code directly to GitHub using the built-in diff viewer.
+
+---
+
+## *Updated* Phase 6: Optimization, Testing & Beta Launch (Weeks 22–24)
+
+*(Shifted back by 3 weeks to accommodate Phase 5)*
+
+**Objective:** System hardening, performance tuning, and rollout.
 
 * **Reference Documents:** PRD (Success Metrics), UI/UX (Motion & Polish).
 * **Key Engineering Tasks:**
 * **Performance:** Implement React Flow viewport virtualization so the browser can handle up to 2,000 nodes at 60 FPS without crashing.
-* **Backend Optimization:** Move heavy repository cloning and AST parsing from serverless functions to AWS ECS Fargate instances to bypass Vercel's execution timeout limits.
-* **Security:** Ensure the `/tmp` volume wipe mechanism works flawlessly, deleting all cloned repository data immediately after a session ends.
-* **UI Polish:** Audit all hover states, transition animations, and dark-mode contrast ratios against the design brief.
+* **Infrastructure:** Finalize AWS ECS Fargate deployment for heavy AST parsing.
+* **Security Audit:** Ensure the terminal WebSocket connection strictly validates the `WorkspaceToken` so unauthorized users cannot execute arbitrary commands on a user's local machine.
 
 
-* **Phase 5 Milestone:** Platform is stable. Time to First Graph (TTFG) is under 10 seconds, and the AST Parse Error rate is below 5%. Ready for developer onboarding.
+* **Phase 6 Milestone:** Platform is stable. Time to First Graph (TTFG) is under 10 seconds, and the AST Parse Error rate is below 5%. Ready for developer onboarding.

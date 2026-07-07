@@ -8,11 +8,14 @@
 //                               [--relay ws://localhost:3001]
 //                               [--dir ./nodecode-project]
 
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 import chokidar from "chokidar";
 import { WebSocket } from "ws";
+
+const execFileAsync = promisify(execFile);
 
 function parseArgs(argv) {
   const args = { token: null, api: "http://localhost:3000", relay: "ws://localhost:3001", dir: "./nodecode-project" };
@@ -29,6 +32,80 @@ function parseArgs(argv) {
 
 const log = (...m) => console.log("[runner]", ...m);
 const warn = (...m) => console.warn("[runner]", ...m);
+
+// Integrated Terminal (Phase 5 §2): a plain child_process shell, not a real
+// pty (no node-pty — avoids a native build on top of everything else this
+// project's local dev env has already fought). Full-screen interactive
+// programs won't render right, but streaming npm/git output works fine.
+let shellProc = null;
+
+function ensureShell(dir, holder) {
+  if (shellProc && !shellProc.killed) return shellProc;
+
+  const isWin = process.platform === "win32";
+  const cmd = isWin ? "cmd.exe" : process.env.SHELL || "/bin/bash";
+  const shellArgs = isWin ? [] : ["-i"];
+
+  const child = spawn(cmd, shellArgs, {
+    cwd: dir,
+    env: { ...process.env, FORCE_COLOR: "1" },
+  });
+
+  const sendOutput = (chunk) => {
+    const ws = holder.ws;
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: "term:output", data: chunk.toString("utf8") }));
+    }
+  };
+  child.stdout.on("data", sendOutput);
+  child.stderr.on("data", sendOutput);
+  child.on("exit", (code) => {
+    const ws = holder.ws;
+    if (ws && ws.readyState === ws.OPEN) {
+      ws.send(JSON.stringify({ type: "term:exit", code }));
+    }
+    shellProc = null;
+  });
+  child.on("error", (err) => warn(`terminal shell error: ${err.message}`));
+
+  log(`terminal shell spawned (${cmd})`);
+  shellProc = child;
+  return child;
+}
+
+// Source Control (Phase 5 §3): thin wrappers around the local `git` CLI.
+// Args are always passed as an array to execFile (never a shell string), so
+// there's no shell-interpolation surface regardless of what a commit message
+// or file path contains.
+
+async function gitStatus(dir) {
+  const { stdout } = await execFileAsync("git", ["status", "--porcelain=v1", "-b"], {
+    cwd: dir,
+  });
+  const lines = stdout.split("\n").filter(Boolean);
+  const branchLine = lines.find((l) => l.startsWith("##"));
+  const branch = branchLine ? branchLine.slice(3).split("...")[0].trim() : "unknown";
+  const files = lines
+    .filter((l) => !l.startsWith("##"))
+    .map((l) => ({ status: l.slice(0, 2).trim(), path: l.slice(3).trim() }));
+  return { branch, files };
+}
+
+async function gitFileDiff(dir, filePath) {
+  const [original, modified] = await Promise.all([
+    execFileAsync("git", ["show", `HEAD:${filePath.replaceAll("\\", "/")}`], { cwd: dir })
+      .then((r) => r.stdout)
+      .catch(() => ""), // untracked / new file — no committed version
+    readFile(path.join(dir, filePath), "utf8").catch(() => ""),
+  ]);
+  return { original, modified };
+}
+
+async function gitCommitAndPush(dir, message) {
+  await execFileAsync("git", ["add", "."], { cwd: dir });
+  await execFileAsync("git", ["commit", "-m", message], { cwd: dir });
+  await execFileAsync("git", ["push"], { cwd: dir });
+}
 
 async function writeProjectFile(dir, filePath, content, writtenByUs) {
   const abs = path.join(dir, filePath);
@@ -114,6 +191,52 @@ function connectRelay(args, dir, writtenByUs, holder) {
         log(`applied browser edit -> ${msg.filePath}`);
       } catch (err) {
         warn(`failed to write ${msg.filePath}: ${err.message}`);
+      }
+    } else if (msg.type === "term:input" && msg.origin === "browser") {
+      // Lazily spawn the shell on first keystroke / quick action. xterm.js
+      // sends a bare \r for Enter; cmd.exe reading piped (non-pty) stdin
+      // needs a full CRLF to treat the line as complete.
+      const data = process.platform === "win32" ? msg.data.replace(/\r(?!\n)/g, "\r\n") : msg.data;
+      ensureShell(dir, holder).stdin.write(data);
+    } else if (msg.type === "term:resize" && msg.origin === "browser") {
+      // No real pty to resize — no-op (accepted limitation of plain spawn).
+    } else if (msg.type === "git:status" && msg.origin === "browser") {
+      const ws2 = holder.ws;
+      try {
+        const result = await gitStatus(dir);
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:status", ...result }));
+        }
+      } catch (err) {
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:error", op: "status", message: err.message }));
+        }
+      }
+    } else if (msg.type === "git:diff" && msg.origin === "browser") {
+      const ws2 = holder.ws;
+      try {
+        const result = await gitFileDiff(dir, msg.filePath);
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:diff", filePath: msg.filePath, ...result }));
+        }
+      } catch (err) {
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:error", op: "diff", message: err.message }));
+        }
+      }
+    } else if (msg.type === "git:commit" && msg.origin === "browser") {
+      const ws2 = holder.ws;
+      try {
+        await gitCommitAndPush(dir, msg.message);
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:commit", ok: true }));
+        }
+        log("committed and pushed local changes");
+      } catch (err) {
+        warn(`git commit/push failed: ${err.message}`);
+        if (ws2?.readyState === ws2.OPEN) {
+          ws2.send(JSON.stringify({ type: "git:commit", ok: false, error: err.message }));
+        }
       }
     }
   });

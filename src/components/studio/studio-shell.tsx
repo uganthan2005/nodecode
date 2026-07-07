@@ -4,6 +4,8 @@ import type { Edge, Node } from "@xyflow/react";
 import { useCallback, useRef, useState } from "react";
 import { WorkspaceCanvas } from "@/components/canvas/workspace-canvas";
 import { CodePanel } from "@/components/editor/code-panel";
+import { StudioSidebar } from "@/components/studio/studio-sidebar";
+import { TerminalDrawer } from "@/components/studio/terminal-drawer";
 
 // Split-screen studio (UIUX §5 screen 2): canvas left, Monaco right,
 // separated by a draggable neon-blue divider. Defaults to 70/30.
@@ -51,24 +53,30 @@ export function StudioShell({
   );
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1">
-      <div className="min-w-0 flex-1">
-        <WorkspaceCanvas
-          workspaceId={workspaceId}
-          initialNodes={initialNodes}
-          initialEdges={initialEdges}
-          hasRepo={hasRepo}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={containerRef} className="flex min-h-0 flex-1">
+        <div className="hidden w-[15%] min-w-[180px] shrink-0 sm:block">
+          <StudioSidebar workspaceId={workspaceId} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <WorkspaceCanvas
+            workspaceId={workspaceId}
+            initialNodes={initialNodes}
+            initialEdges={initialEdges}
+            hasRepo={hasRepo}
+          />
+        </div>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onPointerDown={handleDividerPointerDown}
+          className="w-[3px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-neon-blue active:bg-neon-blue"
         />
+        <div style={{ width: `${editorPct}%` }} className="min-w-[280px] shrink-0">
+          <CodePanel workspaceId={workspaceId} />
+        </div>
       </div>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        onPointerDown={handleDividerPointerDown}
-        className="w-[3px] shrink-0 cursor-col-resize bg-border transition-colors hover:bg-neon-blue active:bg-neon-blue"
-      />
-      <div style={{ width: `${editorPct}%` }} className="min-w-[280px] shrink-0">
-        <CodePanel workspaceId={workspaceId} />
-      </div>
+      <TerminalDrawer workspaceId={workspaceId} />
     </div>
   );
 }

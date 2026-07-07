@@ -7,13 +7,15 @@ export interface RelayHandlers {
   onPeer?: (role: string, connected: boolean) => void;
   /** The runner reported a local edit — the graph should refresh. */
   onRunnerFileChanged?: (filePath: string) => void;
+  /** Catch-all for frame types without a dedicated handler (term:*, git:*). */
+  onMessage?: (msg: Record<string, unknown>) => void;
   onError?: (message: string) => void;
   onClose?: () => void;
 }
 
 export interface RelayConnection {
-  /** Tell the runner a browser-side code edit persisted — it should re-pull. */
-  invalidate: () => void;
+  /** Send an arbitrary frame to the runner peer (tagged with origin by the relay). */
+  send: (frame: Record<string, unknown>) => void;
   close: () => void;
 }
 
@@ -51,6 +53,9 @@ export function connectBrowserRelay(
       case "error":
         handlers.onError?.(String(msg.message ?? "relay error"));
         break;
+      default:
+        handlers.onMessage?.(msg);
+        break;
     }
   });
 
@@ -60,9 +65,9 @@ export function connectBrowserRelay(
   ws.addEventListener("error", () => handlers.onError?.("relay connection error"));
 
   return {
-    invalidate() {
+    send(frame) {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "invalidate" }));
+        ws.send(JSON.stringify(frame));
       }
     },
     close() {

@@ -11,81 +11,36 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  connectBrowserRelay,
-  type RelayConnection,
-} from "@/lib/runner/relay-client";
 import { useCanvasStore } from "@/stores/canvas-store";
+import { useRunnerStore } from "@/stores/runner-store";
 
 // Connect Runner (TRD §7): mints a pairing token, shows the `npx nodecode-runner`
-// command, and opens the browser's own relay socket so it can (a) show whether a
-// runner is live and (b) tell the runner to re-pull after browser-side edits.
-
-type RunnerState = "idle" | "pairing" | "waiting" | "online" | "error";
+// command, and displays the shared runner connection's live status. The socket
+// itself lives in useRunnerStore so the terminal and Source Control tab can
+// reuse it without opening a second connection.
 
 export function ConnectRunner({ workspaceId }: { workspaceId: string }) {
   const [open, setOpen] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
-  const [state, setState] = useState<RunnerState>("idle");
-  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const relayRef = useRef<RelayConnection | null>(null);
+  const connState = useRunnerStore((s) => s.connState);
+  const token = useRunnerStore((s) => s.token);
+  const error = useRunnerStore((s) => s.error);
+  const connect = useRunnerStore((s) => s.connect);
+  const invalidate = useRunnerStore((s) => s.invalidate);
+
   const syncStatus = useCanvasStore((s) => s.syncStatus);
   const prevSyncRef = useRef(syncStatus);
 
   const command = token ? `npx nodecode-runner ${token}` : "";
 
-  const teardown = useCallback(() => {
-    relayRef.current?.close();
-    relayRef.current = null;
-  }, []);
-
-  const pair = useCallback(async () => {
-    setState("pairing");
-    setError(null);
-    try {
-      const res = await fetch("/api/runner/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Failed to mint token");
-        setState("error");
-        return;
-      }
-      setToken(data.token);
-      teardown();
-      relayRef.current = connectBrowserRelay(data.relayUrl, data.token, {
-        onReady: (peers) => setState(peers.includes("runner") ? "online" : "waiting"),
-        onPeer: (role, connected) => {
-          if (role === "runner") setState(connected ? "online" : "waiting");
-        },
-        onRunnerFileChanged: () => {
-          // Runner pushed a local edit into the graph — reload to render it.
-          window.location.reload();
-        },
-        onError: () => setState("error"),
-        onClose: () => setState((s) => (s === "online" ? "waiting" : s)),
-      });
-      setState("waiting");
-    } catch {
-      setError("Network error while pairing");
-      setState("error");
-    }
-  }, [workspaceId, teardown]);
-
   // Browser-side code edits persisted → nudge the runner to re-pull
   useEffect(() => {
     if (prevSyncRef.current === "saving" && syncStatus === "synced") {
-      relayRef.current?.invalidate();
+      invalidate();
     }
     prevSyncRef.current = syncStatus;
-  }, [syncStatus]);
-
-  useEffect(() => () => teardown(), [teardown]);
+  }, [syncStatus, invalidate]);
 
   const copy = useCallback(() => {
     if (!command) return;
@@ -95,21 +50,21 @@ export function ConnectRunner({ workspaceId }: { workspaceId: string }) {
   }, [command]);
 
   const dot =
-    state === "online"
+    connState === "online"
       ? "bg-neon-green"
-      : state === "waiting"
+      : connState === "waiting"
         ? "bg-neon-blue animate-pulse"
-        : state === "error"
+        : connState === "error"
           ? "bg-neon-red"
           : "bg-slate-subtle";
   const label =
-    state === "online"
+    connState === "online"
       ? "runner online"
-      : state === "waiting"
+      : connState === "waiting"
         ? "waiting for runner"
-        : state === "pairing"
+        : connState === "pairing"
           ? "pairing…"
-          : state === "error"
+          : connState === "error"
             ? "error"
             : "runner";
 
@@ -118,7 +73,7 @@ export function ConnectRunner({ workspaceId }: { workspaceId: string }) {
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (next && !token) void pair();
+        if (next) void connect(workspaceId);
       }}
     >
       <DialogTrigger asChild>
@@ -141,14 +96,14 @@ export function ConnectRunner({ workspaceId }: { workspaceId: string }) {
           </DialogDescription>
         </DialogHeader>
 
-        {state === "pairing" ? (
+        {connState === "pairing" ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" /> minting pairing token…
           </div>
         ) : error ? (
           <div className="space-y-3 py-2">
             <p className="font-mono text-xs text-neon-red">{error}</p>
-            <Button variant="outline" size="sm" onClick={pair}>
+            <Button variant="outline" size="sm" onClick={() => void connect(workspaceId)}>
               Retry
             </Button>
           </div>
