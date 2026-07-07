@@ -32,7 +32,7 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-4 border-b bg-card/60 px-4 backdrop-blur">
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border/70 bg-background/70 px-4 backdrop-blur-xl">
         <Link
           href="/dashboard"
           className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -40,7 +40,8 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
           <ArrowLeft className="size-4" />
           Dashboard
         </Link>
-        <span className="text-sm font-semibold">{workspace.name}</span>
+        <span className="h-4 w-px bg-border" />
+        <span className="text-sm font-semibold tracking-tight">{workspace.name}</span>
         {workspace.repoUrl && (
           <span className="truncate font-mono text-xs text-muted-foreground">
             {workspace.repoUrl.replace("https://github.com/", "")}
@@ -62,9 +63,9 @@ export default async function WorkspacePage(props: PageProps<"/workspace/[id]">)
         hasRepo={workspace.repoUrl !== null}
       />
 
-      <footer className="flex h-6 shrink-0 items-center justify-between border-t bg-card/60 px-4 font-mono text-[11px] text-muted-foreground">
+      <footer className="edge-lit flex h-7 shrink-0 items-center justify-between border-t border-border/70 bg-background/70 px-4 font-mono text-[11px] text-muted-foreground backdrop-blur-xl">
         <FooterStatus />
-        <span>git: {workspace.currentBranch}</span>
+        <span className="tracking-wide">git: {workspace.currentBranch}</span>
       </footer>
     </div>
   );

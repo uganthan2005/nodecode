@@ -45,15 +45,24 @@ export default async function LandingPage(props: PageProps<"/">) {
   const errorMessage = errorKey ? (ERROR_MESSAGES[errorKey] ?? ERROR_MESSAGES.oauth_failed) : null;
 
   return (
-    <main className="dot-grid flex flex-1 flex-col items-center justify-center gap-12 px-6 py-24">
-      <div className="flex flex-col items-center gap-6 text-center">
-        <p className="font-mono text-sm tracking-widest text-neon-blue">
-          {"> bi-directional visual TypeScript IDE"}
+    <main className="bg-aurora grain relative flex flex-1 flex-col items-center justify-center gap-16 overflow-hidden px-6 py-24">
+      <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
+
+      <div className="relative flex flex-col items-center gap-6 text-center">
+        <p className="rise flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-neon-blue">
+          <span className="size-1.5 animate-pulse rounded-full bg-neon-blue" />
+          bi-directional visual TypeScript IDE
         </p>
-        <h1 className="text-5xl font-bold tracking-tight sm:text-7xl">
-          Node<span className="text-neon-blue">Code</span>
+        <h1
+          className="rise text-6xl font-bold tracking-tight sm:text-8xl"
+          style={{ animationDelay: "0.08s" }}
+        >
+          Node<span className="text-brand">Code</span>
         </h1>
-        <p className="max-w-xl text-balance text-muted-foreground">
+        <p
+          className="rise max-w-xl text-balance text-lg leading-relaxed text-muted-foreground"
+          style={{ animationDelay: "0.16s" }}
+        >
           Turn any TypeScript codebase into an interactive node graph — and turn
           node graphs back into running code.
         </p>
@@ -64,7 +73,12 @@ export default async function LandingPage(props: PageProps<"/">) {
           </p>
         )}
 
-        <Button asChild size="lg" className="gap-2">
+        <Button
+          asChild
+          size="lg"
+          className="rise glow-blue mt-2 gap-2.5 transition-transform duration-200 hover:-translate-y-0.5"
+          style={{ animationDelay: "0.24s" }}
+        >
           {/* Plain anchor: route handlers must not be client-prefetched via <Link> */}
           <a href="/api/auth/login">
             <GitHubMark className="size-5" />
@@ -73,18 +87,28 @@ export default async function LandingPage(props: PageProps<"/">) {
         </Button>
       </div>
 
-      <div className="grid max-w-4xl gap-4 sm:grid-cols-3">
-        {FEATURES.map(({ icon: Icon, title, body }) => (
+      <div className="relative grid max-w-4xl gap-4 sm:grid-cols-3">
+        {FEATURES.map(({ icon: Icon, title, body }, i) => (
           <div
             key={title}
-            className="rounded-sm border bg-card/80 p-5 backdrop-blur transition-colors hover:border-neon-blue/60"
+            className="panel panel-interactive rise group rounded-md p-5"
+            style={{ animationDelay: `${0.32 + i * 0.08}s` }}
           >
-            <Icon className="mb-3 size-5 text-neon-green" />
-            <h2 className="mb-1 font-semibold">{title}</h2>
-            <p className="text-sm text-muted-foreground">{body}</p>
+            <div className="mb-4 flex size-9 items-center justify-center rounded-md border border-neon-green/25 bg-neon-green/10 text-neon-green transition-colors group-hover:border-neon-green/50">
+              <Icon className="size-4.5" />
+            </div>
+            <h2 className="mb-1.5 font-semibold tracking-tight">{title}</h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">{body}</p>
           </div>
         ))}
       </div>
+
+      <p
+        className="rise relative font-mono text-[11px] tracking-widest text-muted-foreground/50"
+        style={{ animationDelay: "0.6s" }}
+      >
+        NODECODE — SEE YOUR CODE THINK
+      </p>
     </main>
   );
 }

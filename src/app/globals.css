@@ -150,6 +150,133 @@
   background-size: 20px 20px;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Design system polish (Phase 5) — depth, atmosphere & orchestrated motion
+   layered on top of the UI/UX brief palette. Shared tokens keep every surface
+   consistent: panels, entrance motion, glow, and refined base chrome.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --border-strong: #333333;
+  --elevate: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 18px 40px -24px rgba(0, 0, 0, 0.9);
+}
+
+/* Refined base chrome */
+::selection {
+  background: color-mix(in srgb, var(--neon-blue) 30%, transparent);
+  color: #ffffff;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2f2f2f transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+  background-clip: padding-box;
+}
+.font-mono {
+  font-feature-settings: "ss01", "calt";
+}
+
+/* Atmospheric background: soft neon aurora bleeding from the top, grounded on
+   Abyss Black. Used behind marketing + dashboard surfaces for depth. */
+.bg-aurora {
+  background:
+    radial-gradient(
+      62% 46% at 50% -8%,
+      color-mix(in srgb, var(--neon-blue) 13%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      44% 40% at 88% 8%,
+      color-mix(in srgb, var(--neon-green) 8%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 50% at 12% 100%,
+      color-mix(in srgb, var(--neon-blue) 6%, transparent),
+      transparent 72%
+    ),
+    var(--background);
+}
+
+/* Fine film grain overlay — kills the flat digital-black look. pointer-events
+   none so it never intercepts input; apply to a page wrapper, not globally. */
+.grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Elevated surface: subtle top-lit gradient + inset highlight + drop shadow. */
+.panel {
+  background: linear-gradient(180deg, #171717, #121212);
+  border: 1px solid var(--border);
+  box-shadow: var(--elevate);
+}
+.panel-interactive {
+  transition:
+    border-color 0.25s var(--ease-out),
+    box-shadow 0.25s var(--ease-out),
+    transform 0.25s var(--ease-out);
+}
+.panel-interactive:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--neon-blue) 55%, transparent);
+  box-shadow:
+    var(--elevate),
+    0 0 0 1px color-mix(in srgb, var(--neon-blue) 22%, transparent),
+    0 20px 44px -26px color-mix(in srgb, var(--neon-blue) 55%, transparent);
+}
+
+/* Brand wordmark gradient + neon-blue CTA glow */
+.text-brand {
+  background: linear-gradient(120deg, var(--neon-blue), var(--neon-green) 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.glow-blue {
+  box-shadow: 0 10px 34px -10px color-mix(in srgb, var(--neon-blue) 60%, transparent);
+}
+
+/* Orchestrated entrance: fade + rise. Stagger via inline animation-delay. */
+.rise {
+  opacity: 0;
+  animation: nodecode-rise 0.65s var(--ease-out) forwards;
+}
+@keyframes nodecode-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Hairline top-lit divider used on chrome (headers/footers) */
+.edge-lit {
+  box-shadow: 0 -1px 0 0 rgba(255, 255, 255, 0.03) inset;
+}
+
 /* Data-flow edges (UI/UX Design Brief §4): slate bezier at rest,
    electric blue with flowing dashes when selected */
 .react-flow__edge:hover .react-flow__edge-path {
